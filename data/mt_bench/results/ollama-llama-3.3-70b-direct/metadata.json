@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "study_id": "position_and_anonymity",
+  "dataset_sha256": "f02359af006be11bda6903914ee10477716044623b37de2def944b9162d03c63",
+  "judge": "ollama-llama-3.3-70b-direct",
+  "judge_model": "llama3.3:70b",
+  "config_fingerprint": "74f2169a05ff1f6a",
+  "prompt_fingerprint": "41d9716bc333a1c650d0bfebadbb0b55106d19e4224327d0632d55e45e6b47bb"
+}

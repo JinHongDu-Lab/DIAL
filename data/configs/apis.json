@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "accounts": {
+    "deepseek-primary": {"api_key_env": "DEEPSEEK_API_KEY"},
+    "deepseek-secondary": {"api_key_env": "DEEPSEEK_API_KEY_2"},
+    "bailian-primary": {"api_key_env": "BAILIAN_API_KEY"},
+    "hku-1": {"api_key_env": "HKU_API_KEY_1"},
+    "hku-2": {"api_key_env": "HKU_API_KEY_2"},
+    "hku-3": {"api_key_env": "HKU_API_KEY_3"},
+    "hku-4": {"api_key_env": "HKU_API_KEY_4"},
+    "hku-5": {"api_key_env": "HKU_API_KEY_5"},
+    "hku-6": {"api_key_env": "HKU_API_KEY_6"},
+    "hku-7": {"api_key_env": "HKU_API_KEY_7"},
+    "hku-8": {"api_key_env": "HKU_API_KEY_8"},
+    "hku-9": {"api_key_env": "HKU_API_KEY_9"},
+    "ollama-local": {},
+    "google-primary": {"api_key_env": "GEMINI_API_KEY"},
+    "openai-primary": {"api_key_env": "OPENAI_API_KEY"},
+    "anthropic-primary": {"api_key_env": "ANTROPIC_API_KEY"}
+  },
+  "batch_token_budgets": {
+    "google-primary": {
+      "adapter": "google_gemini_batch",
+      "tier": "1",
+      "safety_ratio": 0.75,
+      "estimator": "gemini_local_conservative",
+      "verified_at": "2026-07-31",
+      "source_url": "https://ai.google.dev/gemini-api/docs/rate-limits",
+      "models": {
+        "gemini-3.6-flash": 3000000,
+        "gemini-3.5-flash": 3000000,
+        "gemini-3.5-flash-lite": 10000000,
+        "gemini-3.1-flash-lite": 10000000
+      }
+    },
+    "openai-primary": {
+      "adapter": "openai_batch",
+      "tier": "1",
+      "safety_ratio": 0.75,
+      "estimator": "tiktoken_json",
+      "encoding": "o200k_base",
+      "verified_at": "2026-07-31",
+      "source_url": "https://developers.openai.com/api/docs/models",
+      "models": {
+        "gpt-5.6-sol": 3000000,
+        "gpt-5.6-terra": 3000000,
+        "gpt-5.6-luna": 20000000,
+        "gpt-5.5": 3000000,
+        "gpt-5.5-pro": 1000000,
+        "gpt-5.4": 3000000,
+        "gpt-5.4-mini": 20000000,
+        "gpt-5.4-nano": 20000000,
+        "gpt-5.4-pro": 1350000,
+        "gpt-5.2": 3000000,
+        "gpt-5.2-pro": 1350000,
+        "gpt-5.1": 3000000,
+        "gpt-5": 3000000,
+        "gpt-5-mini": 20000000,
+        "gpt-5-nano": 20000000,
+        "gpt-5-pro": 1350000,
+        "gpt-4.1": 1350000,
+        "gpt-4.1-2025-04-14": 1350000,
+        "gpt-4.1-mini": 2000000,
+        "gpt-4.1-mini-2025-04-14": 2000000,
+        "gpt-4.1-nano": 2000000,
+        "gpt-4o": 90000,
+        "gpt-4o-mini": 2000000,
+        "o1": 1350000,
+        "o1-pro": 1350000,
+        "o3": 90000,
+        "o3-2025-04-16": 90000,
+        "o3-mini": 1000000,
+        "o4-mini": 1000000,
+        "o4-mini-2025-04-16": 1000000
+      }
+    }
+  },
+  "apis": {
+    "deepseek-direct": {
+      "adapter": "litellm",
+      "model_family": "DeepSeek",
+      "base_url": "https://api.deepseek.com"
+    },
+    "bailian-openai": {
+      "adapter": "litellm",
+      "model_family": "Qwen",
+      "base_url": "https://ws-ace1vio5tk0gdkm5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    },
+    "hku-azure-openai": {
+      "adapter": "hku_openai",
+      "model_family": "OpenAI",
+      "base_url": "https://api.hku.hk",
+      "endpoint_template": "/openai/deployments/{model}/chat/completions?api-version=2025-04-01-preview",
+      "auth_header": "api-key"
+    },
+    "hku-azure-responses": {
+      "adapter": "hku_responses",
+      "model_family": "OpenAI Responses",
+      "base_url": "https://api.hku.hk",
+      "endpoint_template": "/openai/responses?api-version=2025-04-01-preview",
+      "auth_header": "api-key"
+    },
+    "hku-vertex-openai": {
+      "adapter": "hku_openai",
+      "model_family": "Qwen / GLM",
+      "quota_scope": "api",
+      "base_url": "https://api.hku.hk",
+      "endpoint_template": "/vertexai/chat/completions",
+      "auth_header": "api-key"
+    },
+    "hku-deepseek": {
+      "adapter": "hku_openai",
+      "model_family": "DeepSeek",
+      "base_url": "https://api.hku.hk",
+      "endpoint_template": "/deepseek/models/chat/completions",
+      "auth_header": "api-key"
+    },
+    "hku-gemini": {
+      "adapter": "hku_gemini",
+      "model_family": "Gemini",
+      "base_url": "https://api.hku.hk",
+      "endpoint_template": "/vertexai-gemini/{model}:generateContent",
+      "auth_header": "api-key"
+    },
+    "hku-claude": {
+      "adapter": "hku_claude",
+      "model_family": "Claude",
+      "base_url": "https://api.hku.hk",
+      "endpoint_template": "/claude/model/{model}/converse",
+      "auth_header": "api-key"
+    },
+    "ollama-local": {
+      "adapter": "openai_chat",
+      "model_family": "Ollama",
+      "base_url": "http://127.0.0.1:11434",
+      "endpoint_template": "/v1/chat/completions"
+    },
+    "google-gemini-batch": {
+      "adapter": "google_gemini_batch",
+      "model_family": "Gemini",
+      "quota_scope": "api",
+      "base_url": "https://generativelanguage.googleapis.com",
+      "endpoint_template": "/v1beta/models/{model}:batchGenerateContent",
+      "auth_header": "x-goog-api-key"
+    },
+    "google-gemma": {
+      "adapter": "google_gemini",
+      "model_family": "Gemma",
+      "quota_scope": "api",
+      "base_url": "https://generativelanguage.googleapis.com",
+      "endpoint_template": "/v1beta/models/{model}:generateContent",
+      "auth_header": "x-goog-api-key"
+    },
+    "openai-batch": {
+      "adapter": "openai_batch",
+      "model_family": "OpenAI",
+      "quota_scope": "api",
+      "base_url": "https://api.openai.com",
+      "endpoint_template": "/v1/batches",
+      "auth_header": "Authorization"
+    },
+    "anthropic-batch": {
+      "adapter": "anthropic_batch",
+      "model_family": "Claude",
+      "quota_scope": "api",
+      "base_url": "https://api.anthropic.com",
+      "endpoint_template": "/v1/messages/batches",
+      "auth_header": "x-api-key"
+    }
+  }
+}

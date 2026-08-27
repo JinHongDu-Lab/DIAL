@@ -1,0 +1,117 @@
+version = 1
+
+[study]
+id = "position_and_anonymity"
+title = "Position (JA-Ranking Overlap)"
+description = "Measure response-position effects, always judged anonymously, on the Arena Chatbot 33K subset overlapping the JA-ranking framework's judge-vs-human comparison set."
+guidelines = "GUIDELINES.md"
+dataset = "data/arena_33k_ja_overlap.parquet"
+dataset_rows = 7738
+dataset_sha256 = "8ce2d2c38e554e2587bd32939c554db8976ae1e63c3f429bf8d4ae3c54dfcfa2"
+api_config = "../configs/apis.json"
+judge_config = "../configs/judges.json"
+judges = [
+    # Distilled panel: the "remaining judges" set from
+    # plan/2026-08-20-remaining-judge-coverage.md plus every Ollama
+    # DeepSeek R1 size. Excludes ollama-qwq-32b-low and
+    # ollama-phi4-reasoning-14b-low, which that coverage doc's panel
+    # definition excludes.
+
+    # OpenAI
+    "openai-gpt-4.1-nano-batch-direct",   # paid, cheapest OpenAI batch model
+    "ollama-gpt-oss-20b-low",             # free, open-weight OpenAI model (reasoning cannot be disabled on this Ollama build)
+
+    # Anthropic (no open-weight Claude exists, so batch only)
+    "anthropic-claude-haiku-4.5-batch-direct",
+
+    # Google: Gemini (paid batch) + Gemma size ladder (free, local)
+    "google-gemini-3.1-flash-lite-batch-minimal",
+    "ollama-gemma-3n-e4b-direct",   # smaller/edge
+    "ollama-gemma-3-27b-direct",    # larger dense
+
+    # Meta
+    "ollama-llama-3.3-70b-direct",
+
+    # Alibaba (Qwen): reasoning toggle at fixed size
+    "ollama-qwen3-30b-a3b-direct",
+    "ollama-qwen3-30b-a3b-low",
+
+    # Mistral AI
+    "ollama-mistral-small-3.2-24b-direct",
+
+    # DeepSeek: full size ladder of R1 distillations (reasoning is always on
+    # for R1; there is no non-reasoning counterpart to pair against)
+    "ollama-deepseek-r1-1.5b-low",
+    "ollama-deepseek-r1-7b-low",
+    "ollama-deepseek-r1-8b-low",
+    "ollama-deepseek-r1-14b-low",
+    "ollama-deepseek-r1-32b-low",
+    "ollama-deepseek-r1-70b-low",
+
+    # Zhipu AI / Z.ai (GLM): older/smaller generation, plus a same-weights
+    # reasoning on/off pair on the current generation
+    "ollama-glm4-9b-direct",
+    "ollama-glm-4.7-flash-direct",
+    "ollama-glm-4.7-flash-thinking",
+
+    # Microsoft
+    "ollama-phi4-14b-direct",
+
+    # Stability AI
+    "ollama-stablelm2-12b-direct",
+
+    # UC Berkeley (NEST lab) — closest current proxy for koala-13b's origin lab
+    "ollama-starling-lm-7b-direct",
+]
+system_prompt = "prompts/system.txt"
+user_prompt_template = "prompts/user.txt"
+results_dir = "results"
+
+[collection]
+num_queries_per_record = 1
+start_index = 0
+max_concurrency = 1
+timeout = 120
+max_retries = 3
+
+[[factors]]
+id = "position"
+label = "Response position"
+description = "Whether the dataset responses retain their original A/B order or are swapped."
+parameter = "response_order_default"
+
+[[factors.levels]]
+id = "original"
+label = "Original order"
+description = "Show response A first and response B second."
+value = true
+
+[[factors.levels]]
+id = "swapped"
+label = "Swapped order"
+description = "Show response B first and response A second."
+value = false
+
+[[factors]]
+id = "anonymity"
+label = "Model-label visibility"
+description = "Fixed: assistant labels always hide the source model names."
+parameter = "is_anonymous"
+
+[[factors.levels]]
+id = "anonymous"
+label = "Anonymous"
+description = "Use Assistant A and Assistant B without model names."
+value = true
+
+[[conditions]]
+id = "original_anonymous"
+label = "Original order · anonymous"
+position = "original"
+anonymity = "anonymous"
+
+[[conditions]]
+id = "swapped_anonymous"
+label = "Swapped order · anonymous"
+position = "swapped"
+anonymity = "anonymous"

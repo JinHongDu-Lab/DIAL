@@ -1,0 +1,32 @@
+Evaluate the following pair.
+
+Output exactly one line in this format:
+<CHOICE> <CONFIDENCE>
+
+<CHOICE> must be one lowercase letter:
+- a: the displayed Assistant A response is better
+- b: the displayed Assistant B response is better
+- c: the displayed responses are equally good
+
+<CONFIDENCE> must be one integer from 1 to 5, where 1 is least confident and 5 is most confident.
+
+The following examples demonstrate syntax only; they are not evaluation hints:
+c 3
+a 3
+b 3
+
+Do not output angle brackets, labels, Markdown, or any additional text.
+
+<user_question>
+$question
+</user_question>
+
+$assistant_a_label
+<assistant_a_response>
+$assistant_a_response
+</assistant_a_response>
+
+$assistant_b_label
+<assistant_b_response>
+$assistant_b_response
+</assistant_b_response>

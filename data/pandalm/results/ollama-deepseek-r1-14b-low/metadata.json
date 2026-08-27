@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "study_id": "position_and_anonymity",
+  "dataset_sha256": "878d3be20e02c4b4c37f3896775d625f5cfbb73045eeaf8af720a0bf0301e6f8",
+  "judge": "ollama-deepseek-r1-14b-low",
+  "judge_model": "deepseek-r1:14b",
+  "config_fingerprint": "211d4aafc40fd672",
+  "prompt_fingerprint": "41d9716bc333a1c650d0bfebadbb0b55106d19e4224327d0632d55e45e6b47bb"
+}

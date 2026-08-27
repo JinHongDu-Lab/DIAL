@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "study_id": "position_and_anonymity",
+  "dataset_sha256": "8ce2d2c38e554e2587bd32939c554db8976ae1e63c3f429bf8d4ae3c54dfcfa2",
+  "judge": "openai-gpt-4.1-nano-batch-direct",
+  "judge_model": "gpt-4.1-nano",
+  "config_fingerprint": "53afd81108b0b118",
+  "prompt_fingerprint": "41d9716bc333a1c650d0bfebadbb0b55106d19e4224327d0632d55e45e6b47bb"
+}
