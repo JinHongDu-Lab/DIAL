@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 DEFAULT_CSV_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "chatbot_arena-JARanking-merged.csv")
+    os.path.join(os.path.dirname(__file__), "..", "..", "chatbot_arena-JARanking-merged.csv")
 )
 
 TIE_LABELS = {"tie", "tie (bothbad)"}

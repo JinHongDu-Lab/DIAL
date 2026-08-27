@@ -10,6 +10,15 @@ DIAL: Debiasing and human-preference Informed Alignment for LLM judges.
 Metrics in evaluate.py: MSE, Spearman, NDCG, Coverage, Sign accuracy (human).
 """
 from .benchmarks import fit_hja, fit_dial, fit_dial_joint, fit_dial_gacv, fit_ht_hja_joint
+from .baselines import (
+    METHOD_STATUS,
+    fit_consensus_only_calibrated,
+    fit_human_only_btl,
+    fit_llm_consensus,
+    fit_pooled_btl,
+    fit_staged_structured_calibration,
+    unavailable_methods,
+)
 from .evaluate import (
     evaluate_scores,
     score_recovery_mse,
@@ -26,6 +35,13 @@ __all__ = [
     "fit_dial_joint",
     "fit_dial_gacv",
     "fit_ht_hja_joint",
+    "METHOD_STATUS",
+    "fit_consensus_only_calibrated",
+    "fit_human_only_btl",
+    "fit_llm_consensus",
+    "fit_pooled_btl",
+    "fit_staged_structured_calibration",
+    "unavailable_methods",
     "evaluate_scores",
     "score_recovery_mse",
     "spearman",

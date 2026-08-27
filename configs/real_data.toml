@@ -1,0 +1,12 @@
+[study]
+seed = 42
+datasets = ["arena_33k", "mt_bench", "pandalm"]
+
+[split]
+unit = "record_id"
+test_fraction = 0.2
+
+[perturbation]
+human_fractions = [0.1, 0.25, 0.5, 1.0]
+llm_fractions = [0.25, 0.5, 1.0]
+label_flip_probabilities = [0.0, 0.05, 0.1, 0.2]
