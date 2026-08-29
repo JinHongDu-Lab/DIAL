@@ -43,9 +43,55 @@ must not be presented as estimator confidence intervals.
 
 ## Real-data modes
 
+- `motivation`: descriptive per-judge summary behind Figure 1(b). Implemented.
 - `perturbation`: controlled human/LLM subsampling, label flips, judge removal,
   and order imbalance, evaluated on held-out human comparisons.
 - `case_study`: full Arena 33K, MT-Bench, or PandaLM analysis.
+
+### Motivation study
+
+```bash
+python run_real_data.py --study motivation --dataset all
+```
+
+No model is fitted here; every quantity is a sample proportion.
+
+Position bias is `swap_inconsistency_rate`, the share of records whose verdict
+changes when the two responses are swapped, among records the judge decides in
+both orders. A judge that ignores display order cannot flip, so `0` is the
+reference. The directional `first_position_rate` is also saved but is not the
+panel: it reads `0.5` both for a judge with no order effect and for one whose
+effects offset, and 21 of 60 judge-study cells here favour the *second*
+position, which a first-position framing would mislabel.
+
+Human misalignment is `agreement_consistent`, agreement with the human label on
+records where the judge returns the same verdict in both orders, so the residual
+gap is not attributable to display order.
+
+`agreement_pooled` is saved but is *not* the alignment metric: when a judge flips
+with order, exactly one of its two verdicts matches the human, so order-averaged
+agreement is a mixture dominated by inconsistency (empirically correlated about
+`0.97` with `swap_inconsistency_rate`, against about `0.25` for
+`agreement_consistent`). Using it would restate position bias rather than measure
+a second phenomenon.
+
+Each row carries a `reasoning` state read from the recorded inference config, not
+parsed from the alias suffix: `direct` (reasoning disabled) or `thinking`
+(enabled or required). The effort level within `thinking` — `low` for the Ollama
+models, `minimal` for Gemini, unset for GLM — is a per-provider setting on no
+common scale, so it is kept in `reasoning_effort` for the record rather than
+treated as an ordered level. Note that `direct` also caps `max_output_tokens` at
+16 against 4096, so the two states differ in decoding configuration, not
+reasoning alone.
+
+Uncertainty is a bootstrap clustered on `record_id`, sharing one resample across
+judges within a study. Judges are reported in full but flagged
+`excluded_from_figure` when they tie on more than half their judgments
+(`ollama-stablelm2-12b-direct`) or cover less than half the study's records
+(`ollama-deepseek-r1-70b-low` on Arena and PandaLM). `ollama-deepseek-r1-32b-low`
+has no Arena responses at all.
+
+`notebooks/figure1b.ipynb` reads the saved CSVs and renders the figure.
 
 Original and swapped responses belonging to one record must stay in the same
 split. Full-data estimates are empirical references, not literal ground truth.

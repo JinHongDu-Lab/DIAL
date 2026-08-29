@@ -18,21 +18,40 @@ student implementation tasks. They never substitute dummy numerical results.
 
 ## Installation
 
-Python 3.10 or later is required.
+This project uses the **`llm`** conda environment (Python 3.11). Activate it
+before running anything here:
 
 ```bash
-python -m pip install -e '.[dev]'
+conda activate llm
+python -m pip install -e '.[dev,viz]'
 ```
 
-The data-collection tools have separate optional dependencies:
+`viz` adds matplotlib, pyarrow, and ipykernel for the analysis notebooks. The
+data-collection tools have separate optional dependencies:
 
 ```bash
 python -m pip install -e '.[data]'
 ```
 
+Python 3.10 is the minimum the package declares, but use 3.11+: the collection
+kit in `data/` relies on the standard-library `tomllib`.
+
+Notebooks under `notebooks/` are pinned to the `Python (llm)` kernel. If it is
+not registered yet:
+
+```bash
+conda activate llm
+python -m ipykernel install --user --name llm --display-name "Python (llm)"
+```
+
+Do not run from the conda `base` environment. A `python3` kernelspec resolving
+to `base` shadows the one inside `llm`, so a notebook left on the default kernel
+will silently execute against `base` instead.
+
 ## Quick checks
 
 ```bash
+conda activate llm
 pytest -m 'not slow'
 pytest
 python run_simulation.py --list-studies
