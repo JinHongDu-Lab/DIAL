@@ -146,16 +146,21 @@ def aggregate_judge_pairs(n_ijk, y_ijk, judge_index=None):
     return pairs
 
 
-def centered_btl_loss_and_grad_from_pairs(N, pairs, s):
-    loss = 0.0
+def _pairs_arrays(pairs):
+    arr = np.asarray(pairs, dtype=float).reshape(-1, 4)
+    return arr[:, 0].astype(int), arr[:, 1].astype(int), arr[:, 2], arr[:, 3]
+
+
+def centered_btl_loss_and_grad_from_pairs(N, pairs, s, arrays=None):
+    i_idx, j_idx, n_arr, y_arr = _pairs_arrays(pairs) if arrays is None else arrays
+    s = np.asarray(s, dtype=float)
+    diff = s[i_idx] - s[j_idx]
+    loss = float(np.sum(y_arr * np.logaddexp(0.0, -diff) + (n_arr - y_arr) * np.logaddexp(0.0, diff)))
+    residual = n_arr * expit(diff) - y_arr
     grad = np.zeros(N, dtype=float)
-    for i, j, n, y in pairs:
-        diff = s[i] - s[j]
-        loss += y * np.logaddexp(0.0, -diff) + (n - y) * np.logaddexp(0.0, diff)
-        residual = n * expit(diff) - y
-        grad[i] += residual
-        grad[j] -= residual
-    return float(loss), grad
+    np.add.at(grad, i_idx, residual)
+    np.add.at(grad, j_idx, -residual)
+    return loss, grad
 
 
 def fit_centered_btl_from_pairs(N, pairs, initial=None, maxiter=500):
@@ -163,10 +168,11 @@ def fit_centered_btl_from_pairs(N, pairs, initial=None, maxiter=500):
         x0 = np.zeros(N, dtype=float)
     else:
         x0 = project_zero_sum(initial)
+    arrays = _pairs_arrays(pairs)
 
     def objective(s_free):
         s = project_zero_sum(s_free)
-        loss, grad = centered_btl_loss_and_grad_from_pairs(N, pairs, s)
+        loss, grad = centered_btl_loss_and_grad_from_pairs(N, pairs, s, arrays=arrays)
         return loss, project_zero_sum(grad)
 
     result = minimize(
@@ -334,6 +340,62 @@ def reduce_item_block(mu, V):
     return mu_reduced, V_reduced
 
 
+def polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=None, y_order=None, maxiter=400, gtol=1e-8):
+    """
+    Finish an LLM-only fit by L-BFGS over the centering-reduced factor chart
+    (gamma_red, U_red, [b], mu_red, V_red), then ReAnchor. The chart has exact
+    invariance directions (factor rotations), along which the objective is flat;
+    L-BFGS handles these without difficulty. Returns the anchored parameters and
+    a dict with the final gradient norm, iteration count, and convergence flag.
+    """
+    use_order = n_order is not None
+    K, N, r = gamma.size, mu.size, U.shape[1]
+    jb, ib = make_centering_basis(K), make_centering_basis(N)
+    n_g, n_U = K - 1, (K - 1) * r
+
+    def unpack(z):
+        idx = 0
+        g = np.ones(K) + jb @ z[idx: idx + n_g]
+        idx += n_g
+        Uu = jb @ z[idx: idx + n_U].reshape(K - 1, r)
+        idx += n_U
+        if use_order:
+            bb = z[idx: idx + K]
+            idx += K
+        else:
+            bb = None
+        m = ib @ z[idx: idx + N - 1]
+        idx += N - 1
+        Vv = ib @ z[idx:].reshape(N - 1, r)
+        return g, m, Uu, Vv, bb
+
+    def fg(z):
+        g, m, Uu, Vv, bb = unpack(z)
+        loss, gmu, ggamma, gU, gV, gb = negative_log_likelihood_and_grad(m, g, Uu, Vv, n_ijk, y_ijk, b=bb, n_order=n_order, y_order=y_order)
+        parts = [jb.T @ ggamma, (jb.T @ gU).ravel()]
+        if use_order:
+            parts.append(gb)
+        parts.extend([ib.T @ gmu, (ib.T @ gV).ravel()])
+        return loss, np.concatenate(parts)
+
+    g_red, U_red = reduce_judge_block(gamma, U)
+    m_red, V_red = reduce_item_block(mu, V)
+    parts = [g_red, U_red.ravel()]
+    if use_order:
+        parts.append(np.asarray(b, dtype=float))
+    parts.extend([m_red, V_red.ravel()])
+    z0 = np.concatenate(parts)
+    # scale-free stopping: gradient relative to total comparisons
+    n_total = float(np.sum(n_order) if use_order else np.sum(n_ijk))
+    res = minimize(fg, z0, jac=True, method="L-BFGS-B", options={"maxiter": maxiter, "gtol": gtol * n_total, "ftol": 1e-15})
+    g, m, Uu, Vv, bb = unpack(res.x)
+    if r > 0:
+        g, m, Uu, Vv = reanchor(g, m, Uu, Vv)
+    grad_norm = float(np.linalg.norm(res.jac)) / n_total
+    info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "nll": float(res.fun)}
+    return g, m, Uu, Vv, (bb if use_order else np.zeros(K)), info
+
+
 def alternating_mle(
     N,
     K,
@@ -343,14 +405,17 @@ def alternating_mle(
     max_steps=120,
     tol=1e-5,
     tau=10.0,
-    inner_maxiter=500,
+    inner_maxiter=100,
     reanchor_steps=True,
     n_order=None,
     y_order=None,
+    polish=True,
+    raise_on_nonconvergence=False,
 ):
     use_order = n_order is not None
     gamma, mu, U, V, b = initialize_parameters(N, K, r, n_ijk, y_ijk, n_order=n_order, y_order=y_order)
     history = []
+    converged = False
 
     judge_basis = make_centering_basis(K)
     item_basis = make_centering_basis(N)
@@ -438,16 +503,25 @@ def alternating_mle(
 
         gamma, mu, U, V, b = gamma_new, mu_new, U_new, V_new, b_new
         if rel_nll < tol:
-            return mu, gamma, U, V, b, {
-                "n_iter": step_index,
-                "converged": True,
-                "history": history,
-                "nll": float(nll),
-                "reanchor_steps": bool(reanchor_steps),
-                "b": b,
-            }
+            converged = True
+            break
 
-    raise RuntimeError("alternating MLE failed to converge within max_steps")
+    fit_info = {
+        "n_iter": len(history),
+        "alternating_converged": converged,
+        "history": history,
+        "nll": float(history[-1]["nll"]) if history else None,
+        "reanchor_steps": bool(reanchor_steps),
+    }
+    if polish:
+        gamma, mu, U, V, b, pinfo = polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=n_order, y_order=y_order)
+        fit_info.update(pinfo)
+        converged = pinfo["polish_converged"]
+    fit_info["converged"] = bool(converged)
+    fit_info["b"] = b
+    if not converged and raise_on_nonconvergence:
+        raise RuntimeError("alternating MLE failed to converge within max_steps")
+    return mu, gamma, U, V, b, fit_info
 
 
 def fit_rank0_model(N, K, n_ijk, y_ijk, maxiter=2000, n_order=None, y_order=None):
@@ -515,6 +589,7 @@ def estimate_parameters(
     reanchor_steps=True,
     n_order=None,
     y_order=None,
+    polish=True,
 ):
     validate_rank(N, K, r)
     if n_order is not None and n_ijk is None:
@@ -535,6 +610,7 @@ def estimate_parameters(
             reanchor_steps=reanchor_steps,
             n_order=n_order,
             y_order=y_order,
+            polish=polish,
         )
     fit_info = dict(fit_info)
     fit_info["b"] = b
@@ -608,6 +684,7 @@ def consensus_contrast_gradient(gamma, mu, U, V, i, j):
 
 
 def compute_information_matrix(gamma, mu, U, V, n_ijk, b=None, n_order=None):
+    """Plug-in Fisher information (per comparison) in the full factor chart, vectorized over cells."""
     gamma = np.asarray(gamma, dtype=float)
     mu = np.asarray(mu, dtype=float)
     U = np.asarray(U, dtype=float)
@@ -616,41 +693,54 @@ def compute_information_matrix(gamma, mu, U, V, n_ijk, b=None, n_order=None):
     N = mu.size
     r = U.shape[1]
     with_b = n_order is not None
+    tri_i, tri_j = np.triu_indices(N, k=1)
     if with_b:
         b = np.zeros(K, dtype=float) if b is None else np.asarray(b, dtype=float)
         n_order = np.asarray(n_order, dtype=float)
         if n_order.shape != (K, N, N, 2):
             raise ValueError(f"n_order must have shape {(K, N, N, 2)}, got {n_order.shape}")
-        total_n = float(np.sum(n_order[:, np.triu_indices(N, k=1)[0], np.triu_indices(N, k=1)[1], :]))
+        counts = n_order[:, tri_i, tri_j, :]  # (K, P, 2)
+        total_n = float(np.sum(counts))
     else:
         n_ijk = np.asarray(n_ijk, dtype=float)
         if n_ijk.shape != (K, N, N):
             raise ValueError(f"n_ijk must have shape {(K, N, N)}, got {n_ijk.shape}")
-        total_n = float(np.sum(n_ijk[:, np.triu_indices(N, k=1)[0], np.triu_indices(N, k=1)[1]]))
+        counts = n_ijk[:, tri_i, tri_j][:, :, None]  # (K, P, 1)
+        total_n = float(np.sum(counts))
     if total_n <= 0:
         raise ValueError("information matrix requires at least one observed comparison")
 
     slices = _param_slices(K, N, r, with_b=with_b)
-    info = np.zeros((slices["size"], slices["size"]), dtype=float)
+    dim = slices["size"]
     score = np.outer(gamma, mu) + U @ V.T
+    delta = score[:, tri_i] - score[:, tri_j]  # (K, P)
+    dmu = mu[tri_i] - mu[tri_j]
+    dV = V[tri_i] - V[tri_j]  # (P, r)
+    P = tri_i.size
+    orders = ORDER_A if with_b else np.array([0.0])
+    info = np.zeros((dim, dim), dtype=float)
     for k in range(K):
-        for i in range(N):
-            for j in range(i + 1, N):
-                if with_b:
-                    for a_idx, a_val in enumerate(ORDER_A):
-                        cell_n = float(n_order[k, i, j, a_idx])
-                        if cell_n <= 0:
-                            continue
-                        p = expit(score[k, i] - score[k, j] + a_val * b[k])
-                        grad = score_contrast_gradient(gamma, mu, U, V, k, i, j, b=b, a_order=a_val)
-                        info += (cell_n / total_n) * p * (1.0 - p) * np.outer(grad, grad)
-                else:
-                    cell_n = float(n_ijk[k, i, j])
-                    if cell_n <= 0:
-                        continue
-                    p = expit(score[k, i] - score[k, j])
-                    grad = score_contrast_gradient(gamma, mu, U, V, k, i, j)
-                    info += (cell_n / total_n) * p * (1.0 - p) * np.outer(grad, grad)
+        # gradient of the linear predictor wrt full chart for judge k, all pairs: (P, dim)
+        X = np.zeros((P, dim), dtype=float)
+        X[:, slices["gamma"].start + k] = dmu
+        X[np.arange(P), slices["mu"].start + tri_i] = gamma[k]
+        X[np.arange(P), slices["mu"].start + tri_j] = -gamma[k]
+        if r > 0:
+            X[:, slices["U"].start + k * r: slices["U"].start + (k + 1) * r] = dV
+            rows_i = slices["V"].start + tri_i[:, None] * r + np.arange(r)[None, :]
+            rows_j = slices["V"].start + tri_j[:, None] * r + np.arange(r)[None, :]
+            X[np.arange(P)[:, None], rows_i] = U[k][None, :]
+            X[np.arange(P)[:, None], rows_j] = -U[k][None, :]
+        for a_idx, a_val in enumerate(orders):
+            cell_n = counts[k, :, a_idx]
+            if not np.any(cell_n > 0):
+                continue
+            Xa = X.copy()
+            if with_b:
+                Xa[:, slices["b"].start + k] = a_val
+            p = expit(delta[k] + (a_val * b[k] if with_b else 0.0))
+            w = (cell_n / total_n) * p * (1.0 - p)
+            info += (Xa * w[:, None]).T @ Xa
     return info
 
 

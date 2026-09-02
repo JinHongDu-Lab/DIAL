@@ -32,7 +32,7 @@ def fit_hja(
     max_steps=120,
     tol=1e-5,
     tau=10.0,
-    inner_maxiter=500,
+    inner_maxiter=100,
     with_uq=False,
     uq_alpha=0.05,
 ):
@@ -75,12 +75,13 @@ def fit_dial(
     n_order=None,
     y_order=None,
     lam=None,
-    max_steps=150,
+    max_steps=30,
     tol=1e-6,
-    tau=10.0,
-    inner_maxiter=500,
+    tau=1.0,
+    inner_maxiter=100,
     with_uq=False,
     uq_alpha=0.05,
+    init_params=None,
 ):
     """DIAL joint estimator: ell_H + lambda ell_L, with optional position effects.
 
@@ -92,7 +93,7 @@ def fit_dial(
         n_ijk_llm=n_ijk_llm, y_ijk_llm=y_ijk_llm,
         n_order=n_order, y_order=y_order,
         lam=lam, max_steps=max_steps, tol=tol, tau=tau, inner_maxiter=inner_maxiter,
-        with_uq=with_uq, uq_alpha=uq_alpha,
+        with_uq=with_uq, uq_alpha=uq_alpha, init_params=init_params,
     )
 
 
@@ -107,10 +108,10 @@ def fit_dial_gacv(
     y_order=None,
     human_records=None,
     lambda_grid=None,
-    max_steps=150,
+    max_steps=30,
     tol=1e-6,
-    tau=10.0,
-    inner_maxiter=500,
+    tau=1.0,
+    inner_maxiter=100,
     with_uq=False,
     uq_alpha=0.05,
 ):

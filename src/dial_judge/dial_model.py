@@ -142,6 +142,36 @@ def calibrated_score_uq(alpha, a, mu, V, pairs, alpha_level=0.05, rcond=1e-8):
     }
 
 
+def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L, maxiter=400, gtol=1e-8):
+    """
+    L-BFGS on the weighted criterion q_lambda over the centering-reduced factor
+    chart (gamma_red, U_red, [b], mu_red, V_red, alpha, a), followed by ReAnchor
+    and re-expression of (alpha, a) in the anchored basis. The chart's exact
+    invariance directions leave q_lambda flat and are harmless for L-BFGS.
+    """
+    from .gacv import pack_reduced, q_lambda_grad, unpack_reduced  # local import: gacv imports this module
+
+    use_order = n_order is not None
+    K, N, r = gamma.size, mu.size, U.shape[1]
+    jb, ib = make_centering_basis(K), make_centering_basis(N)
+    z0 = pack_reduced(gamma, mu, U, V, b, alpha, a, use_order)
+
+    def fg(z):
+        return q_lambda_grad(z, N, K, r, jb, ib, use_order, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L)
+
+    res = minimize(fg, z0, jac=True, method="L-BFGS-B", options={"maxiter": maxiter, "gtol": gtol, "ftol": 1e-15})
+    gamma, mu, U, V, b, alpha, a = unpack_reduced(res.x, N, K, r, jb, ib, use_order)
+    a = np.atleast_1d(a)
+    if r > 0:
+        target = alpha * mu + V @ a
+        gamma, mu, U, V = reanchor(gamma, mu, U, V)
+        coef, *_ = np.linalg.lstsq(np.column_stack([mu, V]), target, rcond=None)
+        alpha, a = float(coef[0]), coef[1:]
+    grad_norm = float(np.linalg.norm(res.jac))
+    info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "total_loss": float(res.fun)}
+    return gamma, mu, U, V, (b if use_order else np.zeros(K)), alpha, a, info
+
+
 def default_lambda(n_L, n_0):
     if n_0 <= 0:
         raise ValueError("n_0 must be positive")
@@ -158,17 +188,22 @@ def joint(
     n_order=None,
     y_order=None,
     lam=None,
-    max_steps=150,
+    max_steps=30,
     tol=1e-6,
-    tau=10.0,
-    inner_maxiter=500,
+    tau=1.0,
+    inner_maxiter=100,
     with_uq=False,
     uq_alpha=0.05,
+    init_params=None,
+    polish=True,
+    polish_gtol=1e-8,
 ):
-    """Minimize ell_H + lambda * ell_L by anchored alternating MLE.
+    """Minimize ell_H + lambda * ell_L by anchored alternating MLE, then L-BFGS polish.
 
     Judge block: (gamma, U, b) from the LLM order-effect likelihood.
     Item + human block: (mu, V, alpha_H, a) from the weighted joint criterion.
+    `init_params`, if given, is (gamma, mu, U, V, b) overriding the default
+    initialization (used, e.g., to check invariance to the factor basis).
     """
     if n_order is not None:
         if n_ijk_llm is None:
@@ -189,7 +224,10 @@ def joint(
     if lam <= 0:
         raise ValueError(f"lambda must be positive, got {lam}")
 
-    gamma, mu, U, V, b = initialize_parameters(N, K, r, n_ijk_llm, y_ijk_llm, n_order=n_order, y_order=y_order)
+    if init_params is None:
+        gamma, mu, U, V, b = initialize_parameters(N, K, r, n_ijk_llm, y_ijk_llm, n_order=n_order, y_order=y_order)
+    else:
+        gamma, mu, U, V, b = (np.array(p, dtype=float, copy=True) for p in init_params)
     alpha, a = fit_human_calibration(mu, V, human_pairs)
 
     judge_basis = make_centering_basis(K)
@@ -313,6 +351,13 @@ def joint(
         if rel_change < tol and step_index > 1:
             break
 
+    alternating_converged = bool(history and history[-1]["rel_change"] < tol and history[-1]["iteration"] > 1)
+    polish_info = {}
+    if polish:
+        gamma, mu, U, V, b, alpha, a, polish_info = polish_joint_fit(
+            gamma, mu, U, V, b, alpha, a, n_ijk_llm, y_ijk_llm, n_order, y_order, pair_arrays, lam, n_0, n_L, gtol=polish_gtol
+        )
+
     s_hat = alpha * mu + (V @ a if V.shape[1] else np.zeros_like(mu))
     result = {
         "gamma": gamma,
@@ -329,9 +374,11 @@ def joint(
         "n_0": n_0,
         "fit_info": {
             "n_iter": history[-1]["iteration"] if history else 0,
-            "converged": bool(history and history[-1]["rel_change"] < tol and history[-1]["iteration"] > 1),
+            "alternating_converged": alternating_converged,
+            "converged": bool(polish_info["polish_converged"]) if polish else alternating_converged,
             "history": history,
-            "total_loss": float(history[-1]["total_loss"]) if history else None,
+            "total_loss": float(polish_info["total_loss"]) if polish else (float(history[-1]["total_loss"]) if history else None),
+            **polish_info,
         },
     }
     if with_uq:

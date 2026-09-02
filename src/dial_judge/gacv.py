@@ -159,12 +159,15 @@ def hessian_from_grad(grad_fn, x, eps=1e-5):
 
 
 def human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i_obs, j_obs, z_obs):
+    """Per-human-observation gradients of h_t in the reduced chart, vectorized: (n_obs, dim)."""
     gamma, mu, U, V, b, alpha, a = unpack_reduced(zeta, N, K, r, judge_basis, item_basis, use_order)
     s = alpha * mu + (V @ a if V.shape[1] else np.zeros_like(mu))
+    a = np.atleast_1d(a)
+    i_obs = np.asarray(i_obs, dtype=int)
+    j_obs = np.asarray(j_obs, dtype=int)
+    z_obs = np.asarray(z_obs, dtype=float)
     n_obs = z_obs.size
     dim = zeta.size
-    grads = np.zeros((n_obs, dim), dtype=float)
-    a = np.atleast_1d(a)
 
     n_g = K - 1
     n_U = (K - 1) * r
@@ -174,20 +177,15 @@ def human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i
     offset_alpha = offset_V + (N - 1) * r
     offset_a = offset_alpha + 1
 
-    for t in range(n_obs):
-        i, j, z = int(i_obs[t]), int(j_obs[t]), float(z_obs[t])
-        delta = s[i] - s[j]
-        resid = expit(delta) - z
-        grad_s = np.zeros(N, dtype=float)
-        grad_s[i] += resid
-        grad_s[j] -= resid
-        # s = alpha * mu + V @ a, mu = item_basis @ mu_red, V = item_basis @ V_red
-        grads[t, offset_mu: offset_V] = item_basis.T @ (alpha * grad_s)
-        if r > 0:
-            grads[t, offset_V: offset_alpha] = (item_basis.T @ np.outer(grad_s, a)).ravel()
-        grads[t, offset_alpha] = float(grad_s @ mu)
-        if r > 0:
-            grads[t, offset_a:] = V.T @ grad_s
+    resid = expit(s[i_obs] - s[j_obs]) - z_obs  # (n_obs,)
+    dB = item_basis[i_obs] - item_basis[j_obs]  # (n_obs, N-1): item_basis^T grad_s with grad_s = resid (e_i - e_j)
+    grads = np.zeros((n_obs, dim), dtype=float)
+    grads[:, offset_mu:offset_V] = alpha * resid[:, None] * dB
+    if r > 0:
+        grads[:, offset_V:offset_alpha] = (resid[:, None, None] * dB[:, :, None] * a[None, None, :]).reshape(n_obs, -1)
+    grads[:, offset_alpha] = resid * (mu[i_obs] - mu[j_obs])
+    if r > 0:
+        grads[:, offset_a:] = resid[:, None] * (V[i_obs] - V[j_obs])
     return grads
 
 
@@ -232,13 +230,39 @@ def gacv_for_fit(
     if n_0 <= 1:
         raise ValueError("GACV requires at least two human comparisons")
     gacv = float(ell_h + tr_product(hess_inv, emp_j) / (n_0 - 1.0))
+    # Regularity (Assumption a2-gacv): the chart has exactly r(r+1) exact invariance directions
+    # (factor rotations and mu-mixing), so the Hessian may have that many zero eigenvalues and no more.
+    eig = np.linalg.eigvalsh(hess)
+    n_null = int(np.sum(eig <= rcond * max(eig.max(), 1e-300)))
+    regular = bool(fit["fit_info"].get("converged", True)) and n_null <= r * (r + 1) and float(np.max(np.abs(fit["s_H"]))) < 25.0
     return {
         "lam": lam,
         "gacv": gacv,
         "ell_H": float(ell_h),
         "q_lambda": float(q_val),
         "trace_term": float(tr_product(hess_inv, emp_j)),
+        "hess_null_dim": n_null,
+        "regular": regular,
     }
+
+
+def endpoint_gacv(X, s_hat, i_obs, j_obs, z_obs, rcond=1e-8):
+    """GACV for a fixed-design logistic fit with per-observation design rows X (n_0, d).
+
+    Used for the endpoints: lambda = 0 (X = centered item-difference rows, d = N - 1) and
+    lambda = inf (X = W_i - W_j with W fixed at the LLM-only fit, d = r + 1).
+    Returns the criterion and a regularity flag (finite fit, nonsingular Hessian).
+    """
+    n_0 = float(z_obs.size)
+    d = s_hat[i_obs] - s_hat[j_obs]
+    p = expit(d)
+    H = (X * (p * (1 - p))[:, None]).T @ X / n_0
+    G = X * (p - z_obs)[:, None]
+    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_0
+    ell = float(np.mean(np.logaddexp(0.0, d) - z_obs * d))
+    eig = np.linalg.eigvalsh(H)
+    regular = bool(eig.min() > rcond * max(eig.max(), 1e-300)) and float(np.max(np.abs(s_hat))) < 25.0
+    return {"gacv": ell + float(np.trace(np.linalg.pinv(H, rcond=rcond) @ J)) / (n_0 - 1), "ell_H": ell, "regular": regular}
 
 
 def tr_product(hess_inv, emp_j):
@@ -256,28 +280,62 @@ def select_lambda(
     y_order=None,
     human_records=None,
     lambda_grid=None,
-    max_steps=150,
+    max_steps=30,
     tol=1e-6,
-    tau=10.0,
-    inner_maxiter=500,
+    tau=1.0,
+    inner_maxiter=100,
     with_uq=False,
     uq_alpha=0.05,
+    warm_start=True,
+    init_params=None,
+    include_endpoints=True,
+    guard=True,
+    staged_fit=None,
+    return_all=False,
 ):
-    """Fit DIAL at each lambda in the grid and return the GACV minimizer."""
-    if n_order is not None and n_ijk_llm is None:
+    """Fit DIAL at each lambda in the grid (plus the endpoints 0 and inf) and return the GACV minimizer.
+
+    The grid is traversed from the largest lambda downward; the first fit is
+    initialized from the LLM-only staged fit (computed here unless `staged_fit`
+    is passed) and each subsequent fit from the previous one (plan Algorithm 1).
+    With `guard`, candidates whose fit is non-convergent or whose criterion
+    Hessian is singular beyond the chart's exact invariances are excluded from
+    the argmin (Assumption a2-gacv) and listed in `dropped`.
+    The returned dict has `lam` in [0, inf]; for lam = 0 it carries the human-only
+    score and for lam = inf the staged calibrated score.
+    """
+    from .baselines import fit_human_only_btl, fit_staged_structured_calibration
+    from .dial_model import calibration_design
+
+    use_order = n_order is not None
+    if use_order and n_ijk_llm is None:
         n_ijk_llm, y_ijk_llm = collapse_order_counts(n_order, y_order)
     n_L = total_llm_n(n_ijk_llm, n_order=n_order)
     n_0_pairs = total_human_n(human_pairs)
     if lambda_grid is None:
         lambda_grid = default_lambda_grid(n_L, n_0_pairs)
+    lambda_grid = sorted(float(l) for l in lambda_grid)
+    if warm_start:
+        lambda_grid = lambda_grid[::-1]
 
     if human_records is not None:
         i_obs, j_obs, z_obs = observations_from_records(human_records)
     else:
         i_obs, j_obs, z_obs = observations_from_pairs(human_pairs)
 
-    path = []
-    best = None
+    if staged_fit is None:
+        staged_fit = fit_staged_structured_calibration(N, K, r, n_ijk_llm, y_ijk_llm, human_pairs, n_order=n_order, y_order=y_order)
+    if init_params is None:
+        init_params = (staged_fit["gamma"], staged_fit["mu"], staged_fit["U"], staged_fit["V"], staged_fit["b"])
+
+    candidates = []  # (lam, gacv, regular, fit)
+    if include_endpoints:
+        W = calibration_design(staged_fit["mu"], staged_fit["V"])
+        e = endpoint_gacv(W[i_obs] - W[j_obs], staged_fit["s_H"], i_obs, j_obs, z_obs)
+        e["regular"] = e["regular"] and bool(staged_fit["fit_info"].get("converged", True))
+        candidates.append((np.inf, e["gacv"], e["regular"], {**staged_fit, "lam": np.inf}))
+
+    current_init = init_params
     for lam in lambda_grid:
         fit = joint(
             N, K, r, human_pairs,
@@ -285,24 +343,33 @@ def select_lambda(
             n_order=n_order, y_order=y_order,
             lam=float(lam),
             max_steps=max_steps, tol=tol, tau=tau, inner_maxiter=inner_maxiter,
-            with_uq=False,
+            with_uq=False, init_params=current_init,
         )
-        scores = gacv_for_fit(
-            fit, N, K, r, n_ijk_llm, y_ijk_llm, n_order, y_order, human_pairs, i_obs, j_obs, z_obs
-        )
-        entry = {"lam": float(lam), "gacv": scores["gacv"], "ell_H": scores["ell_H"], "fit": fit}
-        path.append({"lam": float(lam), "gacv": scores["gacv"], "ell_H": scores["ell_H"]})
-        if best is None or scores["gacv"] < best["gacv"]:
-            best = entry
+        if warm_start:
+            current_init = (fit["gamma"], fit["mu"], fit["U"], fit["V"], fit["b"])
+        scores = gacv_for_fit(fit, N, K, r, n_ijk_llm, y_ijk_llm, n_order, y_order, human_pairs, i_obs, j_obs, z_obs)
+        candidates.append((float(lam), scores["gacv"], scores["regular"], fit))
 
-    selected = best["fit"]
-    selected["lam"] = best["lam"]
-    selected["gacv"] = best["gacv"]
+    if include_endpoints:
+        h = fit_human_only_btl(N, human_pairs)
+        B = make_centering_basis(N)
+        e = endpoint_gacv(B[i_obs] - B[j_obs], h["s_H"], i_obs, j_obs, z_obs)
+        candidates.append((0.0, e["gacv"], e["regular"], {**h, "lam": 0.0, "b": np.zeros(K), "mu": None, "V": None}))
+
+    path = [{"lam": c[0], "gacv": c[1], "regular": c[2]} for c in candidates]
+    admissible = [c for c in candidates if (c[2] or not guard)]
+    if not admissible:
+        admissible = candidates
+    best = min(admissible, key=lambda c: c[1])
+    selected = dict(best[3])
+    selected["lam"] = best[0]
+    selected["gacv"] = best[1]
     selected["gacv_path"] = path
-    if with_uq:
+    selected["dropped"] = [c[0] for c in candidates if guard and not c[2]]
+    if return_all:
+        selected["candidates"] = [(c[0], c[3]) for c in candidates]
+    if with_uq and np.isfinite(best[0]) and best[0] > 0:
         from .dial_model import calibrated_score_uq
 
-        selected["uq"] = calibrated_score_uq(
-            selected["alpha_H"], selected["a"], selected["mu"], selected["V"], human_pairs, alpha_level=uq_alpha
-        )
+        selected["uq"] = calibrated_score_uq(selected["alpha_H"], selected["a"], selected["mu"], selected["V"], human_pairs, alpha_level=uq_alpha)
     return selected
