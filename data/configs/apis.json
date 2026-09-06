@@ -1,22 +1,16 @@
 {
   "version": 1,
   "accounts": {
-    "deepseek-primary": {"api_key_env": "DEEPSEEK_API_KEY"},
-    "deepseek-secondary": {"api_key_env": "DEEPSEEK_API_KEY_2"},
-    "bailian-primary": {"api_key_env": "BAILIAN_API_KEY"},
-    "hku-1": {"api_key_env": "HKU_API_KEY_1"},
-    "hku-2": {"api_key_env": "HKU_API_KEY_2"},
-    "hku-3": {"api_key_env": "HKU_API_KEY_3"},
-    "hku-4": {"api_key_env": "HKU_API_KEY_4"},
-    "hku-5": {"api_key_env": "HKU_API_KEY_5"},
-    "hku-6": {"api_key_env": "HKU_API_KEY_6"},
-    "hku-7": {"api_key_env": "HKU_API_KEY_7"},
-    "hku-8": {"api_key_env": "HKU_API_KEY_8"},
-    "hku-9": {"api_key_env": "HKU_API_KEY_9"},
     "ollama-local": {},
-    "google-primary": {"api_key_env": "GEMINI_API_KEY"},
-    "openai-primary": {"api_key_env": "OPENAI_API_KEY"},
-    "anthropic-primary": {"api_key_env": "ANTROPIC_API_KEY"}
+    "google-primary": {
+      "api_key_env": "GEMINI_API_KEY"
+    },
+    "openai-primary": {
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    "anthropic-primary": {
+      "api_key_env": "ANTROPIC_API_KEY"
+    }
   },
   "batch_token_budgets": {
     "google-primary": {
@@ -76,59 +70,6 @@
     }
   },
   "apis": {
-    "deepseek-direct": {
-      "adapter": "litellm",
-      "model_family": "DeepSeek",
-      "base_url": "https://api.deepseek.com"
-    },
-    "bailian-openai": {
-      "adapter": "litellm",
-      "model_family": "Qwen",
-      "base_url": "https://ws-ace1vio5tk0gdkm5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
-    },
-    "hku-azure-openai": {
-      "adapter": "hku_openai",
-      "model_family": "OpenAI",
-      "base_url": "https://api.hku.hk",
-      "endpoint_template": "/openai/deployments/{model}/chat/completions?api-version=2025-04-01-preview",
-      "auth_header": "api-key"
-    },
-    "hku-azure-responses": {
-      "adapter": "hku_responses",
-      "model_family": "OpenAI Responses",
-      "base_url": "https://api.hku.hk",
-      "endpoint_template": "/openai/responses?api-version=2025-04-01-preview",
-      "auth_header": "api-key"
-    },
-    "hku-vertex-openai": {
-      "adapter": "hku_openai",
-      "model_family": "Qwen / GLM",
-      "quota_scope": "api",
-      "base_url": "https://api.hku.hk",
-      "endpoint_template": "/vertexai/chat/completions",
-      "auth_header": "api-key"
-    },
-    "hku-deepseek": {
-      "adapter": "hku_openai",
-      "model_family": "DeepSeek",
-      "base_url": "https://api.hku.hk",
-      "endpoint_template": "/deepseek/models/chat/completions",
-      "auth_header": "api-key"
-    },
-    "hku-gemini": {
-      "adapter": "hku_gemini",
-      "model_family": "Gemini",
-      "base_url": "https://api.hku.hk",
-      "endpoint_template": "/vertexai-gemini/{model}:generateContent",
-      "auth_header": "api-key"
-    },
-    "hku-claude": {
-      "adapter": "hku_claude",
-      "model_family": "Claude",
-      "base_url": "https://api.hku.hk",
-      "endpoint_template": "/claude/model/{model}/converse",
-      "auth_header": "api-key"
-    },
     "ollama-local": {
       "adapter": "openai_chat",
       "model_family": "Ollama",
@@ -141,14 +82,6 @@
       "quota_scope": "api",
       "base_url": "https://generativelanguage.googleapis.com",
       "endpoint_template": "/v1beta/models/{model}:batchGenerateContent",
-      "auth_header": "x-goog-api-key"
-    },
-    "google-gemma": {
-      "adapter": "google_gemini",
-      "model_family": "Gemma",
-      "quota_scope": "api",
-      "base_url": "https://generativelanguage.googleapis.com",
-      "endpoint_template": "/v1beta/models/{model}:generateContent",
       "auth_header": "x-goog-api-key"
     },
     "openai-batch": {

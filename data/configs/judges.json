@@ -1,113 +1,653 @@
 {
   "version": 1,
   "judges": {
-    "hku-gpt-4.1-nano-direct": {"api":"hku-azure-openai","model":"gpt-4.1-nano","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-4.1-mini-direct": {"api":"hku-azure-openai","model":"gpt-4.1-mini","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-4.1-direct": {"api":"hku-azure-openai","model":"gpt-4.1","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-o4-mini-low": {"api":"hku-azure-openai","model":"o4-mini","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-5-nano-low": {"api":"hku-azure-openai","model":"gpt-5-nano","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-5-mini-low": {"api":"hku-azure-openai","model":"gpt-5-mini","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-5.1-low": {"api":"hku-azure-openai","model":"gpt-5.1","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-5.3-codex-low": {"api":"hku-azure-responses","model":"gpt-5.3-codex","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-5.4-low": {"api":"hku-azure-openai","model":"gpt-5.4","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gpt-5.5-low": {"api":"hku-azure-openai","model":"gpt-5.5","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":150,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gemini-2.5-flash-direct": {"api":"hku-gemini","model":"gemini-2.5-flash","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":true,"seed_supported":true},"generation_seed":0,"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gemini-2.5-flash-thinking": {"api":"hku-gemini","model":"gemini-2.5-flash","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":4096,"reasoning":{"mode":"enabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":true,"seed_supported":true},"generation_seed":0,"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gemini-3-flash-low": {"api":"hku-gemini","model":"gemini-3-flash-preview","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":4096,"reasoning":{"mode":"enabled"}},"capabilities":{"reasoning_modes":["enabled","required"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":true,"seed_supported":true},"generation_seed":0,"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gemini-3.1-pro-low": {"api":"hku-gemini","model":"gemini-3.1-pro-preview","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":4096,"reasoning":{"mode":"required"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":true,"seed_supported":true},"generation_seed":0,"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-gemini-3.5-flash-low": {"api":"hku-gemini","model":"gemini-3.5-flash","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":4096,"reasoning":{"mode":"enabled"}},"capabilities":{"reasoning_modes":["enabled","required"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":true,"seed_supported":true},"generation_seed":0,"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-qwen3-next-80b-instruct-direct": {"api":"hku-vertex-openai","model":"qwen/qwen3-next-80b-a3b-instruct-maas","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"UTC","max_concurrency":1},"routing_seed":0},
-    "hku-qwen3-next-80b-thinking-low": {"api":"hku-vertex-openai","model":"qwen/qwen3-next-80b-a3b-thinking-maas","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"UTC","max_concurrency":1},"routing_seed":0},
-    "hku-qwen3-coder-480b-direct": {"api":"hku-vertex-openai","model":"qwen/qwen3-coder-480b-a35b-instruct-maas","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"UTC","max_concurrency":1},"routing_seed":0},
-    "hku-glm-4.7-thinking": {"api":"hku-vertex-openai","model":"zai-org/glm-4.7-maas","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":5,"requests_per_period":300,"period":"day","timezone":"UTC","max_concurrency":1},"routing_seed":0},
-    "hku-deepseek-v3.2-direct": {"api":"hku-deepseek","model":"DeepSeek-V3.2","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-deepseek-v4-flash-direct": {"api":"hku-deepseek","model":"DeepSeek-V4-Flash","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-deepseek-v4-flash-high": {"api":"hku-deepseek","model":"DeepSeek-V4-Flash","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"high"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-deepseek-v4-pro-high": {"api":"hku-deepseek","model":"DeepSeek-V4-Pro","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"high"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-deepseek-r1-thinking": {"api":"hku-deepseek","model":"DeepSeek-R1","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-claude-haiku-4.5-direct": {"api":"hku-claude","model":"claude-haiku-4.5","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-claude-sonnet-4.6-direct": {"api":"hku-claude","model":"claude-sonnet-4.6","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-claude-sonnet-4.6-low": {"api":"hku-claude","model":"claude-sonnet-4.6","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-claude-sonnet-5-low": {"api":"hku-claude","model":"claude-sonnet-5","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":300,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "hku-claude-opus-4.6-low": {"api":"hku-claude","model":"claude-opus-4.6","accounts":["hku-1","hku-2","hku-3","hku-6","hku-7","hku-8","hku-9"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"requests_per_period":150,"period":"day","timezone":"Asia/Hong_Kong","max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.6-sol-batch-direct": {"api":"openai-batch","model":"gpt-5.6-sol","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.6-sol-batch-low": {"api":"openai-batch","model":"gpt-5.6-sol","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.6-terra-batch-direct": {"api":"openai-batch","model":"gpt-5.6-terra","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.6-terra-batch-low": {"api":"openai-batch","model":"gpt-5.6-terra","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.6-luna-batch-direct": {"api":"openai-batch","model":"gpt-5.6-luna","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.6-luna-batch-low": {"api":"openai-batch","model":"gpt-5.6-luna","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh","max"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.5-batch-direct": {"api":"openai-batch","model":"gpt-5.5","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.5-batch-low": {"api":"openai-batch","model":"gpt-5.5","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.5-pro-batch-medium": {"api":"openai-batch","model":"gpt-5.5-pro","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"medium"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-batch-direct": {"api":"openai-batch","model":"gpt-5.4","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-batch-low": {"api":"openai-batch","model":"gpt-5.4","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-mini-batch-direct": {"api":"openai-batch","model":"gpt-5.4-mini","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-mini-batch-low": {"api":"openai-batch","model":"gpt-5.4-mini","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-nano-batch-direct": {"api":"openai-batch","model":"gpt-5.4-nano","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-nano-batch-low": {"api":"openai-batch","model":"gpt-5.4-nano","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.4-pro-batch-medium": {"api":"openai-batch","model":"gpt-5.4-pro","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"medium"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.2-batch-direct": {"api":"openai-batch","model":"gpt-5.2","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.2-batch-low": {"api":"openai-batch","model":"gpt-5.2","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.2-pro-batch-medium": {"api":"openai-batch","model":"gpt-5.2-pro","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"medium"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["medium","high","xhigh"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.1-batch-direct": {"api":"openai-batch","model":"gpt-5.1","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5.1-batch-low": {"api":"openai-batch","model":"gpt-5.1","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5-batch-low": {"api":"openai-batch","model":"gpt-5","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5-mini-batch-low": {"api":"openai-batch","model":"gpt-5-mini","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5-nano-batch-low": {"api":"openai-batch","model":"gpt-5-nano","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-5-pro-batch-high": {"api":"openai-batch","model":"gpt-5-pro","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"high"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-4.1-batch-direct": {"api":"openai-batch","model":"gpt-4.1","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-4.1-mini-batch-direct": {"api":"openai-batch","model":"gpt-4.1-mini","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-4.1-nano-batch-direct": {"api":"openai-batch","model":"gpt-4.1-nano","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-gpt-4o-batch-direct": {"api":"openai-batch","model":"gpt-4o","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_concurrency":2},"routing_seed":0},
-    "openai-gpt-4o-mini-batch-direct": {"api":"openai-batch","model":"gpt-4o-mini","accounts":["openai-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-o1-batch-low": {"api":"openai-batch","model":"o1","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-o1-pro-batch-high": {"api":"openai-batch","model":"o1-pro","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"high"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1},"routing_seed":0},
-    "openai-o3-batch-low": {"api":"openai-batch","model":"o3","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_concurrency":2},"routing_seed":0},
-    "openai-o3-mini-batch-low": {"api":"openai-batch","model":"o3-mini","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_concurrency":2,"batch_max_input_tokens":900000},"routing_seed":0},
-    "openai-o4-mini-batch-low": {"api":"openai-batch","model":"o4-mini","accounts":["openai-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_concurrency":2,"batch_max_input_tokens":900000},"routing_seed":0},
-    "anthropic-claude-haiku-4.5-batch-direct": {"api":"anthropic-batch","model":"claude-haiku-4-5-20251001","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-sonnet-4.6-batch-direct": {"api":"anthropic-batch","model":"claude-sonnet-4-6","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-sonnet-4.6-batch-low": {"api":"anthropic-batch","model":"claude-sonnet-4-6","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-sonnet-5-batch-direct": {"api":"anthropic-batch","model":"claude-sonnet-5","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-sonnet-5-batch-low": {"api":"anthropic-batch","model":"claude-sonnet-5","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-4.6-batch-direct": {"api":"anthropic-batch","model":"claude-opus-4-6","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-4.6-batch-low": {"api":"anthropic-batch","model":"claude-opus-4-6","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-4.7-batch-direct": {"api":"anthropic-batch","model":"claude-opus-4-7","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-4.7-batch-low": {"api":"anthropic-batch","model":"claude-opus-4-7","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-4.8-batch-direct": {"api":"anthropic-batch","model":"claude-opus-4-8","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-4.8-batch-low": {"api":"anthropic-batch","model":"claude-opus-4-8","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-5-batch-direct": {"api":"anthropic-batch","model":"claude-opus-5","accounts":["anthropic-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-opus-5-batch-low": {"api":"anthropic-batch","model":"claude-opus-5","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "anthropic-claude-fable-5-batch-low": {"api":"anthropic-batch","model":"claude-fable-5","accounts":["anthropic-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":50000},"routing_seed":0},
-    "google-gemini-3.6-flash-batch-minimal": {"api":"google-gemini-batch","model":"gemini-3.6-flash","accounts":["google-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"minimal"}},"capabilities":{"reasoning_modes":["enabled","required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":800},"routing_seed":0},
-    "google-gemini-3.5-flash-batch-minimal": {"api":"google-gemini-batch","model":"gemini-3.5-flash","accounts":["google-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"minimal"}},"capabilities":{"reasoning_modes":["enabled","required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":800},"routing_seed":0},
-    "google-gemini-3.5-flash-lite-batch-minimal": {"api":"google-gemini-batch","model":"gemini-3.5-flash-lite","accounts":["google-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"minimal"}},"capabilities":{"reasoning_modes":["enabled","required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":2500},"routing_seed":0},
-    "google-gemini-3.1-flash-lite-batch-minimal": {"api":"google-gemini-batch","model":"gemini-3.1-flash-lite","accounts":["google-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"minimal"}},"capabilities":{"reasoning_modes":["enabled","required"],"reasoning_efforts":["minimal","low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"max_concurrency":1,"batch_max_requests":2500},"routing_seed":0},
-    "google-gemma-4-31b-direct": {"api":"google-gemma","model":"gemma-4-31b-it","accounts":["google-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":true,"seed_supported":false},"limits":{"requests_per_minute":3,"max_concurrency":1},"routing_seed":0},
-    "google-gemma-4-31b-thinking": {"api":"google-gemma","model":"gemma-4-31b-it","accounts":["google-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"high"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"max_concurrency":1},"routing_seed":0},
-    "google-gemma-4-26b-a4b-direct": {"api":"google-gemma","model":"gemma-4-26b-a4b-it","accounts":["google-primary"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":true,"seed_supported":false},"limits":{"requests_per_minute":3,"max_concurrency":1},"routing_seed":0},
-    "google-gemma-4-26b-a4b-thinking": {"api":"google-gemma","model":"gemma-4-26b-a4b-it","accounts":["google-primary"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"high"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["high"],"temperature_allowed_during_reasoning":false,"seed_supported":false},"limits":{"requests_per_minute":3,"max_concurrency":1},"routing_seed":0},
-    "ollama-qwen3-30b-a3b-direct": {"api":"ollama-local","model":"qwen3:30b-a3b-q4_K_M","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-qwen3-30b-a3b-low": {"api":"ollama-local","model":"qwen3:30b-a3b-q4_K_M","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled","effort":"low"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-gpt-oss-20b-low": {"api":"ollama-local","model":"gpt-oss:20b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-gemma-3-27b-direct": {"api":"ollama-local","model":"gemma3:27b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-gemma-3n-e4b-direct": {"api":"ollama-local","model":"gemma3n:e4b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-mistral-small-3.1-24b-direct": {"api":"ollama-local","model":"mistral-small3.1:24b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-mistral-small-3.2-24b-direct": {"api":"ollama-local","model":"mistral-small3.2:24b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-llama-3.3-70b-direct": {"api":"ollama-local","model":"llama3.3:70b","accounts":["ollama-local"],"request_timeout":300,"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-qwq-32b-low": {"api":"ollama-local","model":"qwq:32b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-phi4-14b-direct": {"api":"ollama-local","model":"phi4:14b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-phi4-reasoning-14b-low": {"api":"ollama-local","model":"phi4-reasoning:14b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-stablelm2-12b-direct": {"api":"ollama-local","model":"stablelm2:12b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-starling-lm-7b-direct": {"api":"ollama-local","model":"starling-lm:7b-alpha","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-deepseek-r1-1.5b-low": {"api":"ollama-local","model":"deepseek-r1:1.5b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-deepseek-r1-7b-low": {"api":"ollama-local","model":"deepseek-r1:7b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-deepseek-r1-8b-low": {"api":"ollama-local","model":"deepseek-r1:8b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-deepseek-r1-14b-low": {"api":"ollama-local","model":"deepseek-r1:14b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-deepseek-r1-32b-low": {"api":"ollama-local","model":"deepseek-r1:32b","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-deepseek-r1-70b-low": {"api":"ollama-local","model":"deepseek-r1:70b","accounts":["ollama-local"],"request_timeout":300,"inference":{"max_output_tokens":4096,"reasoning":{"mode":"required","effort":"low"}},"capabilities":{"reasoning_modes":["required"],"reasoning_efforts":["low","medium","high","max"],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-glm4-9b-direct": {"api":"ollama-local","model":"glm4:9b","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-glm-4.7-flash-direct": {"api":"ollama-local","model":"glm-4.7-flash:q4_K_M","accounts":["ollama-local"],"inference":{"temperature":0,"max_output_tokens":16,"reasoning":{"mode":"disabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0},
-    "ollama-glm-4.7-flash-thinking": {"api":"ollama-local","model":"glm-4.7-flash:q4_K_M","accounts":["ollama-local"],"inference":{"max_output_tokens":4096,"reasoning":{"mode":"enabled"}},"capabilities":{"reasoning_modes":["disabled","enabled"],"reasoning_efforts":[],"temperature_allowed_during_reasoning":false,"seed_supported":true},"generation_seed":0,"limits":{"max_concurrency":1},"routing_seed":0}
+    "openai-gpt-4.1-nano-batch-direct": {
+      "api": "openai-batch",
+      "model": "gpt-4.1-nano",
+      "accounts": [
+        "openai-primary"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": false
+      },
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "anthropic-claude-haiku-4.5-batch-direct": {
+      "api": "anthropic-batch",
+      "model": "claude-haiku-4-5-20251001",
+      "accounts": [
+        "anthropic-primary"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 64,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": false
+      },
+      "limits": {
+        "max_concurrency": 1,
+        "batch_max_requests": 50000
+      },
+      "routing_seed": 0
+    },
+    "google-gemini-3.1-flash-lite-batch-minimal": {
+      "api": "google-gemini-batch",
+      "model": "gemini-3.1-flash-lite",
+      "accounts": [
+        "google-primary"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "enabled",
+          "effort": "minimal"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "enabled",
+          "required"
+        ],
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": false
+      },
+      "limits": {
+        "max_concurrency": 1,
+        "batch_max_requests": 2500
+      },
+      "routing_seed": 0
+    },
+    "ollama-gpt-oss-20b-low": {
+      "api": "ollama-local",
+      "model": "gpt-oss:20b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-gemma-3n-e4b-direct": {
+      "api": "ollama-local",
+      "model": "gemma3n:e4b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-gemma-3-27b-direct": {
+      "api": "ollama-local",
+      "model": "gemma3:27b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-llama-3.3-70b-direct": {
+      "api": "ollama-local",
+      "model": "llama3.3:70b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "request_timeout": 300,
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-qwen3-30b-a3b-direct": {
+      "api": "ollama-local",
+      "model": "qwen3:30b-a3b-q4_K_M",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled",
+          "enabled"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-qwen3-30b-a3b-low": {
+      "api": "ollama-local",
+      "model": "qwen3:30b-a3b-q4_K_M",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "enabled",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled",
+          "enabled"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-mistral-small-3.2-24b-direct": {
+      "api": "ollama-local",
+      "model": "mistral-small3.2:24b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-deepseek-r1-1.5b-low": {
+      "api": "ollama-local",
+      "model": "deepseek-r1:1.5b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-deepseek-r1-7b-low": {
+      "api": "ollama-local",
+      "model": "deepseek-r1:7b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-deepseek-r1-8b-low": {
+      "api": "ollama-local",
+      "model": "deepseek-r1:8b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-deepseek-r1-14b-low": {
+      "api": "ollama-local",
+      "model": "deepseek-r1:14b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-deepseek-r1-32b-low": {
+      "api": "ollama-local",
+      "model": "deepseek-r1:32b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-deepseek-r1-70b-low": {
+      "api": "ollama-local",
+      "model": "deepseek-r1:70b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "request_timeout": 1200,
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "required",
+          "effort": "low"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "required"
+        ],
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-glm4-9b-direct": {
+      "api": "ollama-local",
+      "model": "glm4:9b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-glm-4.7-flash-direct": {
+      "api": "ollama-local",
+      "model": "glm-4.7-flash:q4_K_M",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled",
+          "enabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-glm-4.7-flash-thinking": {
+      "api": "ollama-local",
+      "model": "glm-4.7-flash:q4_K_M",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "max_output_tokens": 4096,
+        "reasoning": {
+          "mode": "enabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled",
+          "enabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-phi4-14b-direct": {
+      "api": "ollama-local",
+      "model": "phi4:14b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-stablelm2-12b-direct": {
+      "api": "ollama-local",
+      "model": "stablelm2:12b",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    },
+    "ollama-starling-lm-7b-direct": {
+      "api": "ollama-local",
+      "model": "starling-lm:7b-alpha",
+      "accounts": [
+        "ollama-local"
+      ],
+      "inference": {
+        "temperature": 0,
+        "max_output_tokens": 16,
+        "reasoning": {
+          "mode": "disabled"
+        }
+      },
+      "capabilities": {
+        "reasoning_modes": [
+          "disabled"
+        ],
+        "reasoning_efforts": [],
+        "temperature_allowed_during_reasoning": false,
+        "seed_supported": true
+      },
+      "generation_seed": 0,
+      "limits": {
+        "max_concurrency": 1
+      },
+      "routing_seed": 0
+    }
   }
 }
