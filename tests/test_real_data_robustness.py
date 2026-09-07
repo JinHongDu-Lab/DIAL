@@ -146,5 +146,6 @@ def test_paired_design_across_levels(monkeypatch):
     hb = next(r for r in b if r["method"] == "human_only")
     assert ha["excess"] == pytest.approx(hb["excess"]) and ha["n_test"] == hb["n_test"]
     methods = {r["method"] for r in a}
-    assert {"human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial", "dial_nodeb", "dial_mle_r0", "oracle_test"} <= methods
+    assert {"human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel"} <= methods
+    dm = next(r for r in a if r["method"] == "dial_mu"); assert dm["r"] == 1
     assert all("error" not in r for r in a), [r["error"][:80] for r in a if "error" in r]

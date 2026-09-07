@@ -15,14 +15,15 @@ import pandas as pd
 
 COLS = [
     ("excess", "excess human risk", True),
-    ("sign_acc", "pairwise sign accuracy", False),
-    ("spearman", "Spearman$(\\hat s, s_0)$", False),
+    ("kendall", "Kendall $\\tau(\\hat s, s_0)$", False),
     ("cov_s", "95% CI coverage", False),
     ("b_rmse", "RMSE$(\\hat b, b)$", True),
+    ("sign_acc", "pairwise sign accuracy", False),
+    ("spearman", "Spearman$(\\hat s, s_0)$", False),
     ("S_mse", "MSE(Ŝ, S)", True),
     ("cov_s_iid", "coverage, binomial sandwich", False),
 ]
-MAIN_COLS = [0, 1, 2, 3, 4]  # columns of COLS shown in the main figure
+MAIN_COLS = [0, 1, 2, 3]  # columns of COLS shown in the main figure
 
 
 def load(cfg, base="."):
@@ -34,9 +35,9 @@ def load(cfg, base="."):
             df[c] = np.nan
     if "error" in df:
         df = df[df["error"].isna()]
-    # regularity: exclude a (row, cell, seed) if staged or dial_mle did not converge
+    # regularity: exclude a (row, cell, seed) if the staged endpoint or the fixed-weight joint fit did not converge
     key = ["row", "n_L", "n_0", "seed"]
-    bad = df[(df.method.isin(["staged", "dial_mle"])) & (~df["converged"].fillna(True).astype(bool))][key].drop_duplicates()
+    bad = df[(df.method.isin(["consensus_cal", "dial_mle_mu"])) & (~df["converged"].fillna(True).astype(bool))][key].drop_duplicates()
     df = df.merge(bad.assign(irregular=True), on=key, how="left")
     df["irregular"] = df["irregular"].fillna(False).astype(bool)
     return df
@@ -64,6 +65,6 @@ if __name__ == "__main__":
     agg.to_csv(outdir / "summary.csv", index=False)
     pd.set_option("display.width", 250)
     pd.set_option("display.max_columns", 30)
-    show = agg[["row", "n_L", "n_0", "method", "n", "excess_mean", "sign_acc_mean", "spearman_mean", "cov_s_mean", "b_rmse_mean", "lam_med", "lam_inf_frac", "lam_zero_frac", "n_irregular"]]
+    show = agg[["row", "n_L", "n_0", "method", "n", "excess_mean", "kendall_mean", "cov_s_mean", "b_rmse_mean", "lam_med", "lam_inf_frac", "lam_zero_frac", "n_irregular"]]
     print(show.round(4).to_string(index=False))
     print("summary:", outdir / "summary.csv")

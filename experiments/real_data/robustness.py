@@ -9,12 +9,14 @@ the only ground truth. Sweeps (configs/real_robustness.toml):
   llm_budget  C2  LLM rows subsampled to n_L at fixed human budgets
   spectest    B2  specification test of s_0 = alpha mu on Arena human subsets
 
-Methods in every cell: human-only BTL; pooled LLM BTL (no judge structure, no order term)
-plus a human-fitted scale; Consensus-cal (rank-0 staged endpoint, s = alpha mu);
-DIAL-mu (rank 0, joint weighted likelihood with GACV weight: the human score is linked
-to the consensus only); DIAL (rank in {0, ..., rank_select_max} and weight by GACV);
-DIAL-noDeb (same without the order term); plus DIAL-MLE at rank 0 and the test-pool
-oracle weight as references.
+Methods in every cell (presented): human-only BTL; Pooled-LLM (one BTL over all
+judgments, no judge structure, no order term, plus a human-fitted scale);
+Consensus-cal (order-effect structured model at the LLM rank r, consensus mu, one
+human-fitted scale: the lambda = infinity endpoint of DIAL); DIAL (`dial_mu`: joint
+weighted likelihood at rank r with the human score aligned to mu only, GACV weight);
+DIAL-noDeb (DIAL without the order term). Diagnostics: `staged_w`, `dial_w`,
+`dial_mle_mu`, `dial_mle_w` (W-calibration and fixed-weight variants), `oracle_test`
+(test-loss-minimizing weight on DIAL's path), `dial_rsel` ((r, lambda) by GACV).
 
 Rows append to results/real_robustness/<dataset>/rows.jsonl keyed by
 (sweep, panel, kind, level, n_0, seed). Aggregation: robustness_plot.py; figures:
@@ -39,7 +41,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import kendalltau
 
-from dial_judge.baselines import fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
+from dial_judge.baselines import fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
 from dial_judge.benchmarks import fit_dial
 from dial_judge.dial_model import fit_human_calibration
 from dial_judge.evaluate import heldout_log_loss, score_accuracy
@@ -55,7 +57,7 @@ RESULTS_ROOT = ROOT / "results" / "real_robustness"
 
 SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest", "planner")
 NOISE_KINDS = ("random", "position", "anti")
-METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial", "dial_nodeb", "dial_mle_r0", "oracle_test")
+METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
 DATASET_CODE = {"arena_33k": 1, "mt_bench": 2, "pandalm": 3}
 
 
@@ -321,10 +323,15 @@ def run_cell(job):
 
     ref = fit_human_only_btl(N, human_pairs(hum_test))["s_H"]
     floor = heldout_log_loss(ref, test_recs)
+    r_llm = int(min(scfg.get("llm_rank", 1), K - 1, N - 2))          # structural rank of the LLM side
     base = dict(dataset=dataset, sweep=sweep, panel=panel_name, kind=kind, level=float(level), n_0=n_0_actual, n_0_level=int(n_0_req) if n_0_req is not None else -1, seed=int(seed),
-                N=N, K_real=K_real, K=K, n_L=n_L, n_test=int(len(hum_test)), n_train_human=int(len(hum_train)), rho_swap=rho, m=int(m),
+                N=N, K_real=K_real, K=K, r=r_llm, n_L=n_L, n_test=int(len(hum_test)), n_train_human=int(len(hum_train)), rho_swap=rho, m=int(m),
                 first_share=float(np.mean(llm["a"].to_numpy() == 1)), floor=floor, human_only_exists=bool(btl_mle_exists(N, pairs)))
     out = []
+    only = cfg.get("_only_methods")
+
+    def want(*names):
+        return only is None or any(mm in only for mm in names)
 
     def rec(method, s_hat, **extra):
         s_hat = np.asarray(s_hat, dtype=float)
@@ -344,52 +351,82 @@ def run_cell(job):
             d.update(b_inj_mean_abs=float(np.mean(np.abs(b[K_real:]))), gamma_inj_mean=float(np.mean(g[K_real:])), gamma_inj_mean_abs=float(np.mean(np.abs(g[K_real:]))))
         return d
 
-    try:
-        rec("human_only", fit_human_only_btl(N, pairs)["s_H"], lam=0.0)
-    except Exception as e:  # noqa: BLE001
-        fail("human_only", e)
+    def lam_fields(lam):
+        lam = float(lam)
+        return dict(lam=lam, lam_rel=(lam * n_0_actual / n_L) if np.isfinite(lam) else float("inf"))
 
-    try:
-        pooled = fit_pooled_btl(N, A[0], A[1])["score"]
-        al, _ = fit_human_calibration(pooled, np.zeros((N, 0)), pairs)
-        rec("pooled_cal", al * pooled, alpha=float(al))
-    except Exception as e:  # noqa: BLE001
-        fail("pooled_cal", e)
-
-    staged = {}
-    try:
-        st0 = fit_staged_structured_calibration(N, K, 0, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
-        staged[(0, True)] = st0
-        rec("consensus_cal", st0["s_H"], lam=float("inf"), alpha=float(st0["alpha_H"]), converged=bool(st0["fit_info"]["converged"]), **inj(st0))
-    except Exception as e:  # noqa: BLE001
-        st0 = None
-        fail("consensus_cal", e)
-
-    if st0 is not None:
+    # ---- baselines
+    if want("human_only"):
         try:
-            sel = select_lambda(N, K, 0, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st0, lambda_grid=lam_grid, return_all=True)
+            rec("human_only", fit_human_only_btl(N, pairs)["s_H"], lam=0.0)
+        except Exception as e:  # noqa: BLE001
+            fail("human_only", e)
+    if want("pooled_cal"):
+        try:
+            pooled = fit_pooled_btl(N, A[0], A[1])["score"]
+            al, _ = fit_human_calibration(pooled, np.zeros((N, 0)), pairs)
+            rec("pooled_cal", al * pooled, alpha=float(al))
+        except Exception as e:  # noqa: BLE001
+            fail("pooled_cal", e)
+
+    # ---- Consensus-cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
+    st_mu = None
+    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu"):
+        try:
+            st_mu = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
+            if want("consensus_cal"):
+                rec("consensus_cal", st_mu["s_H"], **lam_fields(np.inf), alpha=float(st_mu["alpha_H"]), converged=bool(st_mu["fit_info"]["converged"]), **inj(st_mu))
+        except Exception as e:  # noqa: BLE001
+            fail("consensus_cal", e)
+    if st_mu is not None and want("dial_mu", "oracle_test"):
+        try:
+            sel = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_mu, lambda_grid=lam_grid, return_all=True, align="mu")
             lam = float(sel["lam"])
-            rec("dial_mu", sel["s_H"], lam=lam, lam_rel=(lam * n_0_actual / n_L) if np.isfinite(lam) else float("inf"), n_dropped=len(sel["dropped"]),
-                converged=bool(sel.get("fit_info", {}).get("converged", True)), **(inj(sel) if lam > 0 else {}))
-            losses = [(l, heldout_log_loss(f["s_H"], test_recs), f) for l, f in sel["candidates"]]
-            lam_o, _, f_o = min(losses, key=lambda x: x[1])
-            rec("oracle_test", f_o["s_H"], lam=float(lam_o), lam_rel=(float(lam_o) * n_0_actual / n_L) if np.isfinite(lam_o) else float("inf"))
+            rec("dial_mu", sel["s_H"], **lam_fields(lam), n_dropped=len(sel["dropped"]), converged=bool(sel.get("fit_info", {}).get("converged", True)), **(inj(sel) if lam > 0 else {}))
+            if want("oracle_test"):
+                losses = [(l, heldout_log_loss(f["s_H"], test_recs), f) for l, f in sel["candidates"]]
+                lam_o, _, f_o = min(losses, key=lambda x: x[1])
+                rec("oracle_test", f_o["s_H"], **lam_fields(lam_o))
         except Exception as e:  # noqa: BLE001
             fail("dial_mu", e)
+    if st_mu is not None and want("dial_mle_mu"):
         try:
-            jt = fit_dial(N, K, 0, A[0], A[1], pairs, n_order=A[2], y_order=A[3], init_params=(st0["gamma"], st0["mu"], st0["U"], st0["V"], st0["b"]), tol=1e-6, max_steps=30)
-            rec("dial_mle_r0", jt["s_H"], lam=float(jt["lam"]), lam_rel=1.0, converged=bool(jt["fit_info"]["converged"]))
+            jt = fit_dial(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3], init_params=(st_mu["gamma"], st_mu["mu"], st_mu["U"], st_mu["V"], st_mu["b"]), tol=1e-6, max_steps=30, align="mu")
+            rec("dial_mle_mu", jt["s_H"], **lam_fields(jt["lam"]), converged=bool(jt["fit_info"]["converged"]))
         except Exception as e:  # noqa: BLE001
-            fail("dial_mle_r0", e)
+            fail("dial_mle_mu", e)
 
-    for name, use_order in (("dial", True), ("dial_nodeb", False)):
+    # ---- DIAL-noDeb: same as DIAL without the order term
+    if want("dial_nodeb"):
         try:
-            r_sel, sel, table = _gacv_rank_select(N, K, pairs, A, use_order, lam_grid, r_max, staged)
-            lam = float(sel["lam"])
-            rec(name, sel["s_H"], r_sel=r_sel, lam=lam, lam_rel=(lam * n_0_actual / n_L) if np.isfinite(lam) else float("inf"), n_dropped=len(sel["dropped"]),
-                converged=bool(sel.get("fit_info", {}).get("converged", True)), rank_table=table, **(inj(sel) if (lam > 0 and use_order) else {}))
+            st0 = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs)
+            sel0 = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], staged_fit=st0, lambda_grid=lam_grid, align="mu")
+            rec("dial_nodeb", sel0["s_H"], **lam_fields(sel0["lam"]), n_dropped=len(sel0["dropped"]), converged=bool(sel0.get("fit_info", {}).get("converged", True)))
         except Exception as e:  # noqa: BLE001
-            fail(name, e)
+            fail("dial_nodeb", e)
+
+    # ---- W-calibration diagnostics at the same LLM rank
+    if r_llm >= 1 and want("staged_w", "dial_w", "dial_mle_w"):
+        try:
+            st_w = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
+            if want("staged_w"):
+                rec("staged_w", st_w["s_H"], **lam_fields(np.inf), converged=bool(st_w["fit_info"]["converged"]))
+            if want("dial_w"):
+                selw = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_w, lambda_grid=lam_grid, align="W")
+                rec("dial_w", selw["s_H"], **lam_fields(selw["lam"]), n_dropped=len(selw["dropped"]), converged=bool(selw.get("fit_info", {}).get("converged", True)))
+            if want("dial_mle_w"):
+                jtw = fit_dial(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3], init_params=(st_w["gamma"], st_w["mu"], st_w["U"], st_w["V"], st_w["b"]), tol=1e-6, max_steps=30, align="W")
+                rec("dial_mle_w", jtw["s_H"], **lam_fields(jtw["lam"]), converged=bool(jtw["fit_info"]["converged"]))
+        except Exception as e:  # noqa: BLE001
+            fail("dial_w", e)
+
+    # ---- rank-selected W-calibration (appendix diagnostic): (r, lambda) by GACV over r in 0..r_max
+    if want("dial_rsel"):
+        try:
+            r_sel, selr, table = _gacv_rank_select(N, K, pairs, A, True, lam_grid, r_max, {})
+            rec("dial_rsel", selr["s_H"], r_sel=r_sel, **lam_fields(selr["lam"]), n_dropped=len(selr["dropped"]), converged=bool(selr.get("fit_info", {}).get("converged", True)), rank_table=table)
+        except Exception as e:  # noqa: BLE001
+            fail("dial_rsel", e)
 
     secs = time.perf_counter() - t0
     for row in out:
@@ -415,7 +452,8 @@ def run_spectest(job):
     hum_te = hum[hum["record"].isin(test)]
     llm = llm[~llm["record"].isin(test)]                      # LLM rows on test records are held out too
     A = llm_arrays(llm, N, K)
-    mu = fit_staged_structured_calibration(N, K, 0, A[0], A[1], [(0, 1, 2.0, 1.0)], n_order=A[2], y_order=A[3])["mu"]
+    r_llm = int(min(cfg["study"].get("llm_rank", 1), K - 1, N - 2))
+    mu = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], [(0, 1, 2.0, 1.0)], n_order=A[2], y_order=A[3])["mu"]
     cal = draw_budget(hum_tr, n_0, np.random.default_rng([int(seed), 12, int(n_0)]))
     pairs = human_pairs(cal)
     test_recs = human_records(hum_te)
@@ -450,7 +488,8 @@ def run_planner(job):
     hum_test = panel["human"][panel["human"]["record"].isin(test) & (panel["human"]["y"] != 0.5)].reset_index(drop=True)
     pilot = draw_budget(hum_train, int(n_pilot), np.random.default_rng([int(seed), code, 2]))
     A = llm_arrays(llm, N, K)
-    mu = fit_staged_structured_calibration(N, K, 0, A[0], A[1], [(0, 1, 2.0, 1.0)], n_order=A[2], y_order=A[3])["mu"]
+    r_llm = int(min(cfg["study"].get("llm_rank", 1), K - 1, N - 2))
+    mu = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], [(0, 1, 2.0, 1.0)], n_order=A[2], y_order=A[3])["mu"]
     test_recs = human_records(hum_test)
     floor = heldout_log_loss(fit_human_only_btl(N, human_pairs(hum_test))["s_H"], test_recs)
     t_pilot = calibration_restriction_test(N, human_pairs(pilot), mu)
@@ -505,13 +544,20 @@ def job_key(job):
     return (sweep, p, kind, float(lv), int(n0) if n0 is not None else -1, int(s))
 
 
-def existing_keys(path):
-    keys = set()
+def existing_keys(path, only=None):
+    """Keys already stored; with `only`, a key counts as done only if every listed method has a row for it."""
+    keys, seen = set(), {}
     if path.exists():
         with open(path) as f:
             for line in f:
                 d = json.loads(line)
-                keys.add((d["sweep"], d["panel"], d["kind"], float(d["level"]), int(d.get("n_0_level", -1)), int(d["seed"])))
+                key = (d["sweep"], d["panel"], d["kind"], float(d["level"]), int(d.get("n_0_level", -1)), int(d["seed"]))
+                if only is None:
+                    keys.add(key)
+                else:
+                    seen.setdefault(key, set()).add(d["method"])
+    if only is not None:
+        keys = {k for k, ms in seen.items() if set(only) <= ms}
     return keys
 
 
@@ -526,6 +572,7 @@ def main(argv=None):
     p.add_argument("--select-rank", action="store_true")
     p.add_argument("--clean-fit", action="store_true")
     p.add_argument("--ja", action="store_true", help="run the JA-Ranking reanalysis (figure A1) and exit")
+    p.add_argument("--methods", default=None, help="comma-separated method keys: compute only these, for cells that lack them (spectest/planner skipped)")
     a = p.parse_args(argv)
     cfg = load_config(a.config)
     root = Path(a.out) if a.out else RESULTS_ROOT
@@ -553,6 +600,10 @@ def main(argv=None):
     s0, s1 = (int(x) for x in a.seeds.split(":"))
     seeds = range(s0, s1)
     sweeps = list(SWEEPS) if a.sweep == "all" else [a.sweep]
+    only = [m.strip() for m in a.methods.split(",")] if a.methods else None
+    if only:
+        cfg["_only_methods"] = only
+        sweeps = [sw for sw in sweeps if sw not in ("spectest", "planner")]
     jobs = []
     for sw in sweeps:
         jobs += jobs_for(sw, cfg, seeds, smoke=a.smoke)
@@ -560,7 +611,7 @@ def main(argv=None):
     for d in cfg["study"]["datasets"]:
         path = root / d / "rows.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
-        files[d], done[d] = path, existing_keys(path)
+        files[d], done[d] = path, existing_keys(path, only)
     def _dataset_of(j):
         return j[0] if len(j) == 8 else (j[1] if len(j) == 5 else "arena_33k")
 

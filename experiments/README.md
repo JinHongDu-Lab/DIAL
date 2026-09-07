@@ -4,42 +4,42 @@ The repository has two synthetic studies and two real-data modes. Root-level
 runners provide a stable command-line interface; study modules contain the
 scientific design and produce JSON-serializable records.
 
-## Synthetic study 1: position bias
+## Method panel (both studies)
 
-Generate `S = gamma mu^T + U V^T`, query both display orders, and vary the
-position-effect magnitude and LLM sample size.
+`experiments/style.py` fixes the five presented estimators, their order, names, and
+colours, for every figure of the simulation and the real-data study
+(`code/plan/2026-09-07-unified-method-panel-plan.md`):
 
-Methods:
+| Key | Presented name | Definition |
+|---|---|---|
+| `human_only` | Human-only | centred BTL on the human sample (lambda = 0) |
+| `pooled_cal` | Pooled-LLM | one BTL over all LLM judgments (no judge identity, no order term) plus a human-fitted scale |
+| `consensus_cal` | Consensus-cal | order-effect structured model at rank r on LLM data, consensus mu, one human-fitted scale (lambda = infinity endpoint of DIAL) |
+| `dial_mu` | DIAL | joint weighted likelihood at rank r, human score aligned to mu only (`align="mu"`), GACV weight |
+| `dial_nodeb` | DIAL-noDeb | DIAL without the order term |
 
-1. position-aware structured BTL (DIAL stage 1);
-2. the same structured BTL after discarding order;
-3. probability-scale swap averaging followed by BTL;
-4. paired-order logit averaging with documented smoothing.
+Diagnostics (appendix only): `staged_w`, `dial_w`, `dial_mle_w` (calibration within
+W = [mu, V]), `dial_mle_mu` (fixed weight n_L / n_0), `oracle_mu` / `oracle_test`
+(population-risk or test-loss minimizer on DIAL's path), `dial_rsel` ((r, lambda) by GACV).
+The alignment is an option of `dial_model.joint`, `gacv.select_lambda`, and
+`benchmarks.fit_dial` (`align="W"` remains the library default).
 
-Primary metrics are position-effect RMSE, score-matrix MSE, and debiased
-pairwise-probability MSE. Ranking metrics alone are insufficient because
-probability averaging can preserve the population ranking while shrinking
-preferences toward one half.
+## Simulation R1 (`simulation/r1_main.py`, `r1_plot.py`, `notebooks/1_simulation.ipynb`)
 
-## Synthetic study 2: human preference
+LLM side S = gamma mu^T + U V^T at rank r with judge-specific position effects and an
+unbalanced display (canonical item first with probability 0.75); human target
+s_0 = alpha_0 mu (configs `main10`, `app20`, aligned with the consensus as on the three
+benchmarks) or s_0 = W c_0 with c_V ~ N(0, 0.5^2) (`main10_mis`, appendix, where DIAL-W
+is needed). Rows: n_0 at fixed n_L (theory lines (N-1)/(2 n_0) and 1/(2 n_0)); n_L at
+fixed n_0 with pair-level LLM overdispersion. Metrics: excess human risk, Kendall tau
+(= 2 x pairwise sign accuracy - 1), 95% contrast coverage (cell-clustered sandwich), RMSE
+of b-hat; Spearman and MSE(S) in the appendix tables.
 
-Generate `s_H = alpha_H mu + V a` under the well-specified model. Use two rows:
-no LLM position bias and mild judge-specific position bias. At fixed human
-budget, vary the LLM comparison budget.
-
-Methods:
-
-1. human-only BTL;
-2. position-debiased LLM consensus;
-3. consensus-only calibration;
-4. staged structured calibration, `lambda = infinity`;
-5. DIAL with GACV-selected `lambda_hat`;
-6. unstructured order-effect BTL + SVD + calibration;
-7. optional AtC.
-
-Report score MSE, held-out human log loss, Spearman, NDCG, sign accuracy, and
-the selected weight. Monte Carlo standard errors describe repetition noise and
-must not be presented as estimator confidence intervals.
+```bash
+python experiments/simulation/r1_main.py --config main10 --row both --seeds 0:50 --workers 6
+python experiments/simulation/r1_main.py --config app20  --row both --seeds 0:50 --workers 6
+python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 0:50 --workers 6
+```
 
 ## Real-data modes
 
@@ -52,15 +52,15 @@ must not be presented as estimator confidence intervals.
   one-sided display), `budget` (human labels, balanced LLM data), `llm_budget`
   (LLM rows subsampled at fixed human budgets), `spectest` (likelihood-ratio
   test of `s_0 = alpha mu` on Arena human subsets), and `planner` (budget
-  prediction from a pilot via the test statistic). Methods: human-only,
-  pooled-LLM + scale, Consensus-cal (rank-0 staged), DIAL-mu (rank 0, joint
-  weighted likelihood, GACV weight), DIAL (rank and weight by GACV), DIAL-noDeb,
-  plus DIAL-mu at the MLE weight and the test-pool oracle weight as references.
+  prediction from a pilot via the test statistic). Methods: the shared panel above, LLM rank
+  `llm_rank = 1`, plus the diagnostics; `--methods a,b` recomputes only the listed
+  methods for cells that lack them.
   `real_data/ja_reanalysis.py` rescored HJA's JA-Ranking judge files against our
   human labels (`--ja`). Rows append to `results/real_robustness/<dataset>/rows.jsonl`,
   `robustness_plot.py` aggregates, and `notebooks/real_data_robustness.ipynb`
   draws `figures/fig_real_main.pdf` (position bias; robustness and verification),
-  `fig_real_efficiency.pdf`, and `fig_real_planner.pdf`.
+  `fig_real_noise_abundant.pdf`, `fig_real_efficiency.pdf`, `fig_real_planner.pdf`,
+  and `fig_real_diagnostics.pdf`.
 
   ```bash
   python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12

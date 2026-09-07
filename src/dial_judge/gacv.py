@@ -132,7 +132,10 @@ def q_lambda_grad(
     l_l, gmu_l, ggamma_l, gU_l, gV_l, gb_l = negative_log_likelihood_and_grad(
         mu, gamma, U, V, n_ijk, y_ijk, b=b, n_order=n_order, y_order=y_order
     )
-    l_h, galpha, ga, gmu_h, gV_h = human_nll_and_grad(alpha, a, mu, V, pair_arrays)
+    a = np.atleast_1d(a)
+    l_h, galpha, ga, gmu_h, gV_h_cal = human_nll_and_grad(alpha, a, mu, V[:, :a.size], pair_arrays)
+    gV_h = np.zeros_like(V)
+    gV_h[:, :a.size] = gV_h_cal
     q = (l_h / n_0) + lam * (l_l / n_L)
     scale_l = lam / n_L
     g_gamma_red = judge_basis.T @ (scale_l * ggamma_l)
@@ -161,8 +164,8 @@ def hessian_from_grad(grad_fn, x, eps=1e-5):
 def human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i_obs, j_obs, z_obs):
     """Per-human-observation gradients of h_t in the reduced chart, vectorized: (n_obs, dim)."""
     gamma, mu, U, V, b, alpha, a = unpack_reduced(zeta, N, K, r, judge_basis, item_basis, use_order)
-    s = alpha * mu + (V @ a if V.shape[1] else np.zeros_like(mu))
     a = np.atleast_1d(a)
+    s = alpha * mu + (V[:, :a.size] @ a if a.size else np.zeros_like(mu))
     i_obs = np.asarray(i_obs, dtype=int)
     j_obs = np.asarray(j_obs, dtype=int)
     z_obs = np.asarray(z_obs, dtype=float)
@@ -181,11 +184,14 @@ def human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i
     dB = item_basis[i_obs] - item_basis[j_obs]  # (n_obs, N-1): item_basis^T grad_s with grad_s = resid (e_i - e_j)
     grads = np.zeros((n_obs, dim), dtype=float)
     grads[:, offset_mu:offset_V] = alpha * resid[:, None] * dB
-    if r > 0:
-        grads[:, offset_V:offset_alpha] = (resid[:, None, None] * dB[:, :, None] * a[None, None, :]).reshape(n_obs, -1)
+    if a.size > 0:
+        # only the first a.size columns of V enter the calibration; the remaining V columns get zero human gradient
+        gV = np.zeros((n_obs, N - 1, r))
+        gV[:, :, :a.size] = resid[:, None, None] * dB[:, :, None] * a[None, None, :]
+        grads[:, offset_V:offset_alpha] = gV.reshape(n_obs, -1)
     grads[:, offset_alpha] = resid * (mu[i_obs] - mu[j_obs])
-    if r > 0:
-        grads[:, offset_a:] = resid[:, None] * (V[i_obs] - V[j_obs])
+    if a.size > 0:
+        grads[:, offset_a:] = resid[:, None] * (V[i_obs, :a.size] - V[j_obs, :a.size])
     return grads
 
 
@@ -226,7 +232,8 @@ def gacv_for_fit(
     g_bar = g_t.mean(axis=0)
     emp_j = ((g_t - g_bar).T @ (g_t - g_bar)) / n_0
     hess_inv = np.linalg.pinv(hess, rcond=rcond)
-    ell_h = human_nll_and_grad(fit["alpha_H"], fit["a"], fit["mu"], fit["V"], pair_arrays)[0] / n_0
+    a_fit = np.atleast_1d(np.asarray(fit["a"], dtype=float))
+    ell_h = human_nll_and_grad(fit["alpha_H"], a_fit, fit["mu"], np.asarray(fit["V"], dtype=float)[:, :a_fit.size], pair_arrays)[0] / n_0
     if n_0 <= 1:
         raise ValueError("GACV requires at least two human comparisons")
     gacv = float(ell_h + tr_product(hess_inv, emp_j) / (n_0 - 1.0))
@@ -321,8 +328,13 @@ def select_lambda(
     return_all=False,
     endpoint_existence_check=True,
     max_abs_score=10.0,
+    align="W",
 ):
     """Fit DIAL at each lambda in the grid (plus the endpoints 0 and inf) and return the GACV minimizer.
+
+    `align` ("W" or "mu") is passed to `joint`; with "mu" the human score is aligned to the
+    consensus only while V is still estimated. A supplied `staged_fit` must use the same
+    alignment (its `a` has length r for "W" and 0 for "mu").
 
     The grid is traversed from the largest lambda downward; the first fit is
     initialized from the LLM-only staged fit (computed here unless `staged_fit`
@@ -363,13 +375,21 @@ def select_lambda(
         i_obs, j_obs, z_obs = observations_from_pairs(human_pairs)
 
     if staged_fit is None:
-        staged_fit = fit_staged_structured_calibration(N, K, r, n_ijk_llm, y_ijk_llm, human_pairs, n_order=n_order, y_order=y_order)
+        if align == "mu":
+            from .baselines import fit_consensus_only_calibrated
+
+            staged_fit = fit_consensus_only_calibrated(N, K, r, n_ijk_llm, y_ijk_llm, human_pairs, n_order=n_order, y_order=y_order)
+        else:
+            staged_fit = fit_staged_structured_calibration(N, K, r, n_ijk_llm, y_ijk_llm, human_pairs, n_order=n_order, y_order=y_order)
+    a_staged = np.atleast_1d(np.asarray(staged_fit["a"], dtype=float))
+    if r > 0 and (align == "mu") != (a_staged.size == 0):
+        raise ValueError("staged_fit alignment does not match `align`")
     if init_params is None:
         init_params = (staged_fit["gamma"], staged_fit["mu"], staged_fit["U"], staged_fit["V"], staged_fit["b"])
 
     candidates = []  # (lam, gacv, regular, fit)
     if include_endpoints:
-        W = calibration_design(staged_fit["mu"], staged_fit["V"])
+        W = calibration_design(staged_fit["mu"], np.asarray(staged_fit["V"], dtype=float)[:, :a_staged.size])
         e = endpoint_gacv(W[i_obs] - W[j_obs], staged_fit["s_H"], i_obs, j_obs, z_obs)
         e["regular"] = e["regular"] and bool(staged_fit["fit_info"].get("converged", True))
         candidates.append((np.inf, e["gacv"], e["regular"], {**staged_fit, "lam": np.inf}))
@@ -382,7 +402,7 @@ def select_lambda(
             n_order=n_order, y_order=y_order,
             lam=float(lam),
             max_steps=max_steps, tol=tol, tau=tau, inner_maxiter=inner_maxiter,
-            with_uq=False, init_params=current_init,
+            with_uq=False, init_params=current_init, align=align,
         )
         if warm_start:
             current_init = (fit["gamma"], fit["mu"], fit["U"], fit["V"], fit["b"])
@@ -416,5 +436,6 @@ def select_lambda(
     if with_uq and np.isfinite(best[0]) and best[0] > 0:
         from .dial_model import calibrated_score_uq
 
-        selected["uq"] = calibrated_score_uq(selected["alpha_H"], selected["a"], selected["mu"], selected["V"], human_pairs, alpha_level=uq_alpha)
+        a_sel = np.atleast_1d(np.asarray(selected["a"], dtype=float))
+        selected["uq"] = calibrated_score_uq(selected["alpha_H"], a_sel, selected["mu"], np.asarray(selected["V"], dtype=float)[:, :a_sel.size], human_pairs, alpha_level=uq_alpha)
     return selected

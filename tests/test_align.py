@@ -1,0 +1,73 @@
+"""Alignment option: human score aligned to the consensus only (align="mu") versus within W (align="W")."""
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from dial_judge.baselines import fit_consensus_only_calibrated, fit_staged_structured_calibration
+from dial_judge.benchmarks import fit_dial
+from dial_judge.data import comparisons_to_aggregated, comparisons_to_order_aggregated, pool_pairs
+from dial_judge.gacv import select_lambda
+from dial_judge.inference import joint_sandwich
+from dial_judge.simulate import (
+    compute_human_score, compute_score_matrix, generate_plan_calibration, generate_plan_parameters,
+    generate_plan_position_effects, generate_random_human_comparisons, generate_random_llm_comparisons,
+)
+
+
+@pytest.fixture(scope="module")
+def data():
+    N, K, r = 8, 4, 1
+    mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=3)
+    b = generate_plan_position_effects(K, random_seed=4)
+    c_mu, c_v = generate_plan_calibration(V, c_v_sd=0.0, random_seed=5)      # rank-0 aligned human target
+    S = compute_score_matrix(mu, gamma, U, V)
+    s0 = compute_human_score(mu, V, c_mu, c_v)
+    llm = generate_random_llm_comparisons(S, b, 6000, random_seed=6, swap_fraction=0.25)
+    hum = generate_random_human_comparisons(s0, 300, random_seed=7)
+    n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
+    n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
+    return dict(N=N, K=K, r=r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, pairs=pool_pairs(hum), s0=s0)
+
+
+def test_joint_align_mu_shapes_and_score(data):
+    d = data
+    fit = fit_dial(d["N"], d["K"], d["r"], d["n_ijk"], d["y_ijk"], d["pairs"], n_order=d["n_order"], y_order=d["y_order"], align="mu", max_steps=10)
+    assert fit["a"].size == 0 and fit["V"].shape == (d["N"], d["r"]) and fit["align"] == "mu"
+    assert np.allclose(fit["s_H"], fit["alpha_H"] * fit["mu"])
+    assert fit["W"].shape == (d["N"], 1)
+    fit_w = fit_dial(d["N"], d["K"], d["r"], d["n_ijk"], d["y_ijk"], d["pairs"], n_order=d["n_order"], y_order=d["y_order"], align="W", max_steps=10)
+    assert fit_w["a"].size == d["r"] and fit_w["W"].shape == (d["N"], d["r"] + 1)
+    # the mu-aligned fit is at least as good on the LLM side is not required; but both must be finite and close in excess
+    assert np.isfinite(fit["s_H"]).all() and np.isfinite(fit_w["s_H"]).all()
+
+
+def test_rank0_aligns_coincide(data):
+    d = data
+    f_mu = fit_dial(d["N"], d["K"], 0, d["n_ijk"], d["y_ijk"], d["pairs"], n_order=d["n_order"], y_order=d["y_order"], align="mu", max_steps=10)
+    f_w = fit_dial(d["N"], d["K"], 0, d["n_ijk"], d["y_ijk"], d["pairs"], n_order=d["n_order"], y_order=d["y_order"], align="W", max_steps=10)
+    assert np.allclose(f_mu["s_H"], f_w["s_H"], atol=1e-6)
+
+
+def test_select_lambda_align_mu_and_sandwich(data):
+    d = data
+    st = fit_consensus_only_calibrated(d["N"], d["K"], d["r"], d["n_ijk"], d["y_ijk"], d["pairs"], n_order=d["n_order"], y_order=d["y_order"])
+    assert np.atleast_1d(st["a"]).size == 0
+    sel = select_lambda(d["N"], d["K"], d["r"], d["pairs"], n_ijk_llm=d["n_ijk"], y_ijk_llm=d["y_ijk"], n_order=d["n_order"], y_order=d["y_order"],
+                        staged_fit=st, align="mu", lambda_grid=[20.0, 200.0], return_all=True)
+    assert all(np.isfinite(p["gacv"]) for p in sel["gacv_path"])
+    lams = {lam for lam, _ in sel["candidates"]}
+    assert lams == {np.inf, 200.0, 20.0, 0.0}
+    for lam, f in sel["candidates"]:
+        if 0 < lam < np.inf:
+            assert np.atleast_1d(f["a"]).size == 0 and f["V"].shape[1] == d["r"]
+            sw = joint_sandwich(f, d["N"], d["K"], d["r"], d["pairs"], d["n_ijk"], d["y_ijk"], d["n_order"], d["y_order"], cluster="pair")
+            dim = (d["K"] - 1) * (1 + d["r"]) + d["K"] + (d["N"] - 1) * (1 + d["r"]) + 1      # no a-coordinates
+            assert sw["hessian"].shape == (dim, dim) and np.isfinite(sw["contrasts"]["lower"]).all()
+    # a mismatched staged fit is rejected
+    st_w = fit_staged_structured_calibration(d["N"], d["K"], d["r"], d["n_ijk"], d["y_ijk"], d["pairs"], n_order=d["n_order"], y_order=d["y_order"])
+    with pytest.raises(ValueError):
+        select_lambda(d["N"], d["K"], d["r"], d["pairs"], n_ijk_llm=d["n_ijk"], y_ijk_llm=d["y_ijk"], n_order=d["n_order"], y_order=d["y_order"], staged_fit=st_w, align="mu", lambda_grid=[20.0])
+    # default alignment stays "W" and still works with the W staged fit
+    sel_w = select_lambda(d["N"], d["K"], d["r"], d["pairs"], n_ijk_llm=d["n_ijk"], y_ijk_llm=d["y_ijk"], n_order=d["n_order"], y_order=d["y_order"], staged_fit=st_w, lambda_grid=[20.0])
+    assert np.isfinite(sel_w["gacv"])

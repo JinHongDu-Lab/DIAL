@@ -11,7 +11,9 @@ llm_ties = "drop"
 human_ties = "drop"
 # GACV candidate weights as multiples of n_L / n_0 (plus the endpoints 0 and infinity).
 lambda_multipliers = [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
-# Candidate ranks for the rank-selected DIAL (and DIAL-noDeb): 0 .. rank_select_max.
+# Structural rank of the LLM side for Consensus-cal, DIAL, DIAL-noDeb, and the W diagnostics (capped at min(K-1, N-2)).
+llm_rank = 1
+# Candidate ranks for the rank-selected W-calibration diagnostic `dial_rsel`: 0 .. rank_select_max.
 rank_select_max = 2
 position_noise_first_prob = 0.9
 

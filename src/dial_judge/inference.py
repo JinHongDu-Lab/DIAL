@@ -184,7 +184,8 @@ def _target_jacobian(zeta, N, K, r, judge_basis, item_basis, use_order, eps=1e-6
     """Finite-difference Jacobians of zeta -> (s_cal, vec(S), b); the map is polynomial so FD is near exact."""
     def targets(z):
         gamma, mu, U, V, b, alpha, a = unpack_reduced(z, N, K, r, judge_basis, item_basis, use_order)
-        s = alpha * mu + (V @ a if r > 0 else 0.0)
+        a = np.atleast_1d(a)
+        s = alpha * mu + (V[:, :a.size] @ a if a.size else 0.0)
         S = np.outer(gamma, mu) + (U @ V.T if r > 0 else 0.0)
         return np.concatenate([s, S.ravel(), b])
 

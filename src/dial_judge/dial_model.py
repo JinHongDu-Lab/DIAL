@@ -64,6 +64,25 @@ def calibration_design(mu, V):
     return np.column_stack([mu, V])
 
 
+def calibration_columns(V, a):
+    """The columns of V that enter the calibration: the first a.size of them.
+
+    Alignment convention: the calibration rank is the length of the coefficient
+    vector `a` (r for align="W", 0 for align="mu"), while V keeps all r
+    disagreement directions on the LLM side.
+    """
+    V = np.asarray(V, dtype=float)
+    r_cal = int(np.atleast_1d(a).size)
+    return V[:, :r_cal] if V.ndim == 2 else np.zeros((V.shape[0], 0))
+
+
+def cal_score(alpha, a, mu, V):
+    """s_cal = alpha mu + V[:, :a.size] a."""
+    mu = np.asarray(mu, dtype=float)
+    a = np.atleast_1d(np.asarray(a, dtype=float))
+    return float(alpha) * mu + (calibration_columns(V, a) @ a if a.size else np.zeros_like(mu))
+
+
 def human_nll_and_grad(alpha, a, mu, V, pair_arrays):
     i_idx, j_idx, n_arr, y_arr = pair_arrays
     a = np.atleast_1d(a)
@@ -163,9 +182,9 @@ def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_orde
     gamma, mu, U, V, b, alpha, a = unpack_reduced(res.x, N, K, r, jb, ib, use_order)
     a = np.atleast_1d(a)
     if r > 0:
-        target = alpha * mu + V @ a
+        target = cal_score(alpha, a, mu, V)
         gamma, mu, U, V = reanchor(gamma, mu, U, V)
-        coef, *_ = np.linalg.lstsq(np.column_stack([mu, V]), target, rcond=None)
+        coef, *_ = np.linalg.lstsq(calibration_design(mu, calibration_columns(V, a)), target, rcond=None)
         alpha, a = float(coef[0]), coef[1:]
     grad_norm = float(np.linalg.norm(res.jac))
     info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "total_loss": float(res.fun)}
@@ -197,8 +216,13 @@ def joint(
     init_params=None,
     polish=True,
     polish_gtol=1e-8,
+    align="W",
 ):
     """Minimize ell_H + lambda * ell_L by anchored alternating MLE, then L-BFGS polish.
+
+    `align="W"` calibrates within W = [mu, V] (coefficients (alpha, a), a of length r);
+    `align="mu"` aligns the human score to the consensus only, s_cal = alpha mu, while V
+    is still estimated on the LLM side (a has length 0). The two coincide when r = 0.
 
     Judge block: (gamma, U, b) from the LLM order-effect likelihood.
     Item + human block: (mu, V, alpha_H, a) from the weighted joint criterion.
@@ -228,7 +252,11 @@ def joint(
         gamma, mu, U, V, b = initialize_parameters(N, K, r, n_ijk_llm, y_ijk_llm, n_order=n_order, y_order=y_order)
     else:
         gamma, mu, U, V, b = (np.array(p, dtype=float, copy=True) for p in init_params)
-    alpha, a = fit_human_calibration(mu, V, human_pairs)
+    if align not in ("W", "mu"):
+        raise ValueError(f"align must be 'W' or 'mu', got {align!r}")
+    r_cal = r if align == "W" else 0
+    alpha, a = fit_human_calibration(mu, V[:, :r_cal], human_pairs)
+    a = np.atleast_1d(np.asarray(a, dtype=float))
 
     judge_basis = make_centering_basis(K)
     item_basis = make_centering_basis(N)
@@ -238,7 +266,7 @@ def joint(
 
     def weighted_loss(gamma, mu, U, V, b, alpha, a):
         l_l = negative_log_likelihood(mu, gamma, U, V, n_ijk_llm, y_ijk_llm, b=b, n_order=n_order, y_order=y_order)
-        l_h, _, _, _, _ = human_nll_and_grad(alpha, a, mu, V, pair_arrays)
+        l_h, _, _, _, _ = human_nll_and_grad(alpha, a, mu, V[:, :r_cal], pair_arrays)
         return (l_h / n_0) + lam * (l_l / n_L), l_l, l_h
 
     history = []
@@ -295,9 +323,11 @@ def joint(
             l_l, grad_mu_l, _, _, grad_V_l, _ = negative_log_likelihood_and_grad(
                 mu_new, gamma_tilde, U_tilde, V_new, n_ijk_llm, y_ijk_llm, b=b_tilde, n_order=n_order, y_order=y_order
             )
-            l_h, grad_alpha_h, grad_a_h, grad_mu_h, grad_V_h = human_nll_and_grad(
-                alpha_new, a_new, mu_new, V_new, pair_arrays
+            l_h, grad_alpha_h, grad_a_h, grad_mu_h, grad_V_h_cal = human_nll_and_grad(
+                alpha_new, a_new, mu_new, V_new[:, :r_cal], pair_arrays
             )
+            grad_V_h = np.zeros_like(V_new)
+            grad_V_h[:, :r_cal] = grad_V_h_cal
             grad_mu = grad_mu_h / n_0 + lam * grad_mu_l / n_L
             grad_V = grad_V_h / n_0 + lam * grad_V_l / n_L
             objective_value = (l_h / n_0) + lam * (l_l / n_L) + 0.5 * tau * np.sum((block - current_item_block) ** 2)
@@ -327,8 +357,8 @@ def joint(
 
         gamma_new, mu_new, U_new, V_new = reanchor(gamma_tilde, mu_tilde, U_tilde, V_tilde)
         if r > 0:
-            target = alpha_tilde * mu_tilde + V_tilde @ a_tilde
-            design = np.column_stack([mu_new, V_new])
+            target = cal_score(alpha_tilde, a_tilde, mu_tilde, V_tilde)
+            design = calibration_design(mu_new, calibration_columns(V_new, a_tilde))
             coef, *_ = np.linalg.lstsq(design, target, rcond=None)
             alpha_new, a_new = float(coef[0]), coef[1:]
         else:
@@ -358,7 +388,8 @@ def joint(
             gamma, mu, U, V, b, alpha, a, n_ijk_llm, y_ijk_llm, n_order, y_order, pair_arrays, lam, n_0, n_L, gtol=polish_gtol
         )
 
-    s_hat = alpha * mu + (V @ a if V.shape[1] else np.zeros_like(mu))
+    a = np.atleast_1d(np.asarray(a, dtype=float))
+    s_hat = cal_score(alpha, a, mu, V)
     result = {
         "gamma": gamma,
         "mu": mu,
@@ -367,8 +398,9 @@ def joint(
         "b": b,
         "alpha_H": alpha,
         "a": a,
+        "align": align,
         "s_H": s_hat,
-        "W": calibration_design(mu, V),
+        "W": calibration_design(mu, calibration_columns(V, a)),
         "lam": lam,
         "n_L": n_L,
         "n_0": n_0,
