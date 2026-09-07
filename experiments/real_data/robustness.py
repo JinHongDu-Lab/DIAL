@@ -274,6 +274,11 @@ def _gacv_rank_select(N, K, pairs, A, use_order, lam_grid, r_max, staged_cache):
     return best[0], best[1], table
 
 
+def per_dataset(value, dataset):
+    """Config entries may be a scalar/list (shared) or a table keyed by dataset."""
+    return value[dataset] if isinstance(value, dict) else value
+
+
 def run_cell(job):
     dataset, sweep, panel_name, kind, level, n_0_req, seed, cfg = job
     scfg, dcfg, swcfg = cfg["study"], cfg[dataset], cfg["sweeps"][sweep]
@@ -292,7 +297,7 @@ def run_cell(job):
     elif sweep in ("noise", "noise_scarce"):
         m = int(level)
         if sweep == "noise_scarce":
-            n_0 = int(swcfg.get("n_0_fixed", n_0))
+            n_0 = int(per_dataset(swcfg.get("n_0_fixed", n_0), dataset))
     elif sweep == "budget":
         n_0 = int(level)
     elif sweep == "llm_budget":
@@ -304,7 +309,7 @@ def run_cell(job):
     llm = panel["llm"][panel["llm"]["record"].isin(train)].reset_index(drop=True)
     K_real = panel["K"]
     if sweep == "noise_scarce":
-        llm = subsample_rows(llm, int(swcfg["n_L_base"]), rng_design)      # scarce base sample before injection
+        llm = subsample_rows(llm, int(per_dataset(swcfg["n_L_base"], dataset)), rng_design)      # scarce base sample before injection
     llm, K = inject_noise_judges(llm, K_real, m, kind, rng_design, first_prob=scfg.get("position_noise_first_prob", 0.9))
     llm = thin_display_order(llm, rho, rng_design)
     llm = subsample_rows(llm, n_L_req, rng_design)
@@ -522,8 +527,9 @@ def jobs_for(sweep, cfg, seeds, smoke=False):
                 levels = levels[:2] if smoke else levels
                 jobs += [(d, sweep, p, "none", lv, None, s, cfg) for lv in levels for s in seeds]
             elif sweep == "llm_budget":
-                levels = sw["levels"][:2] if smoke else sw["levels"]
-                jobs += [(d, sweep, p, "none", lv, n0, s, cfg) for lv in levels for n0 in sw["n_0_grid"] for s in seeds]
+                levels = per_dataset(sw["levels"], d)
+                levels = levels[:2] if smoke else levels
+                jobs += [(d, sweep, p, "none", lv, n0, s, cfg) for lv in levels for n0 in per_dataset(sw["n_0_grid"], d) for s in seeds]
             elif sweep in ("noise", "noise_scarce"):
                 kinds = sw["kinds"][:1] if smoke else sw["kinds"]
                 levels = sw["levels"][:2] if smoke else sw["levels"]

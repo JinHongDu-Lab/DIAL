@@ -34,13 +34,13 @@ biased5 = ["ollama-mistral-small-3.2-24b-direct", "anthropic-claude-haiku-4.5-ba
 
 # A2: display-order design. Default order = canonical item first; level = share of swapped copies kept.
 [sweeps.order]
-datasets = ["arena_33k", "pandalm"]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
 panels = ["biased5", "all"]
 levels = [0.0, 0.05, 0.2, 1.0]
 
 # B1: injected judges under a one-sided display (5% swaps) into the small biased panel.
 [sweeps.noise]
-datasets = ["arena_33k"]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
 panels = ["biased5"]
 kinds = ["anti", "position"]
 levels = [0, 1, 2, 4, 8]
@@ -49,13 +49,14 @@ rho_swap = 0.05
 # B1': injected judges when LLM judgments are scarce: the five-judge panel is subsampled to n_L balanced rows
 # first, then m synthetic judges are added answering the retained records; n_0 fixed by n_0_fixed.
 [sweeps.noise_scarce]
-datasets = ["arena_33k"]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
 panels = ["biased5"]
 kinds = ["anti", "position"]
 levels = [0, 1, 2, 4, 8]
 rho_swap = 1.0
-n_L_base = 2000
-n_0_fixed = 1000
+# scarce base: about ten LLM judgments per pair on each benchmark (190 / 15 / 10 pairs)
+n_L_base = { arena_33k = 2000, mt_bench = 160, pandalm = 100 }
+n_0_fixed = { arena_33k = 1000, mt_bench = 80, pandalm = 60 }
 
 # C1: human budget with the as-collected balanced LLM data; level = n_0 (-1 = all train labels).
 [sweeps.budget]
@@ -69,11 +70,12 @@ pandalm = [20, 40, 80, 160, 320, -1]
 
 # C2: LLM budget (rows subsampled from the balanced data) at two human budgets.
 [sweeps.llm_budget]
-datasets = ["arena_33k"]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
 panels = ["all", "biased5"]
 rho_swap = 1.0
-levels = [500, 1000, 2000, 5000, 20000]
-n_0_grid = [300, 1000]
+# levels scaled by the number of pairs so that each benchmark spans about 3 to 100 judgments per pair
+levels = { arena_33k = [500, 1000, 2000, 5000, 20000], mt_bench = [40, 80, 160, 400, 1600], pandalm = [25, 50, 100, 250, 1000] }
+n_0_grid = { arena_33k = [300, 1000], mt_bench = [80], pandalm = [60] }
 
 # B2: specification test of s_0 = alpha mu on Arena human subsets; level = n_0.
 [sweeps.spectest]

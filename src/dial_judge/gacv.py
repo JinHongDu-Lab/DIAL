@@ -352,6 +352,8 @@ def select_lambda(
     (`btl_mle_exists`), i.e. the human comparison graph is not strongly
     connected and the human-only fit is separated. The flag is returned as
     `human_only_exists`.
+    When every candidate is irregular the selector returns the largest lambda (the
+    lam = inf endpoint when included) rather than the raw GACV minimizer.
     The returned dict has `lam` in [0, inf]; for lam = 0 it carries the human-only
     score and for lam = inf the staged calibrated score.
     """
@@ -423,7 +425,11 @@ def select_lambda(
     path = [{"lam": c[0], "gacv": c[1], "regular": c[2]} for c in candidates]
     admissible = [c for c in candidates if (c[2] or not guard)]
     if not admissible:
-        admissible = candidates
+        # Every candidate is irregular: the human sample is (nearly) separated at every
+        # weight, so the guards give no basis for comparing GACV values. Fall back to the
+        # most LLM-anchored candidate (lam = inf when the endpoints are included), whose
+        # calibrated score is finite whenever the LLM-only fit is.
+        admissible = [max(candidates, key=lambda c: c[0])]
     best = min(admissible, key=lambda c: c[1])
     selected = dict(best[3])
     selected["lam"] = best[0]

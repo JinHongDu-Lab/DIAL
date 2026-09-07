@@ -71,3 +71,25 @@ def test_select_lambda_align_mu_and_sandwich(data):
     # default alignment stays "W" and still works with the W staged fit
     sel_w = select_lambda(d["N"], d["K"], d["r"], d["pairs"], n_ijk_llm=d["n_ijk"], y_ijk_llm=d["y_ijk"], n_order=d["n_order"], y_order=d["y_order"], staged_fit=st_w, lambda_grid=[20.0])
     assert np.isfinite(sel_w["gacv"])
+
+
+def test_select_lambda_all_irregular_falls_back_to_anchor():
+    """When every candidate fails the guards, the selector returns the lam = inf endpoint."""
+    from dial_judge.gacv import select_lambda
+    rng = np.random.default_rng(3)
+    N, K, r = 5, 3, 1
+    n_ijk = np.full((K, N, N), 40.0); y_ijk = np.zeros((K, N, N))
+    s_true = np.linspace(-1.5, 1.5, N)
+    for k in range(K):
+        for i in range(N):
+            for j in range(N):
+                if i != j:
+                    y_ijk[k, i, j] = rng.binomial(40, 1 / (1 + np.exp(-(s_true[i] - s_true[j]))))
+                    n_ijk[k, i, j] = 40.0
+    # (i, j, n, y): item 0 is undefeated, so the win graph is not strongly connected and the
+    # human-only MLE does not exist, while the other items have mixed results (finite scale fit)
+    pairs = [(0, j, 3, 3) for j in range(1, N)] + [(1, 2, 3, 2), (2, 3, 3, 2), (3, 4, 3, 2), (1, 4, 3, 1)]
+    sel = select_lambda(N, K, r, pairs, n_ijk_llm=n_ijk, y_ijk_llm=y_ijk, lambda_grid=[1e6, 1e7], max_abs_score=1e-9, align="mu")
+    assert not sel["human_only_exists"]
+    assert len(sel["dropped"]) == len(sel["gacv_path"])
+    assert sel["lam"] == np.inf and np.all(np.isfinite(sel["s_H"]))
