@@ -58,6 +58,25 @@ def score_accuracy(score, records, skip_ties=True):
     return float(correct / total) if total > 0 else None
 
 
+def heldout_log_loss(score, records, skip_ties=True):
+    """Mean Bernoulli negative log-likelihood of sigma(score_i - score_j) over
+    (k, i, j, y) comparisons. The real-data analogue of the excess human risk:
+    it is minimized in population by the true human score, and differences
+    between methods on the same held-out comparisons are directly comparable.
+    Ties (y = 0.5) are skipped by default, matching `score_accuracy`."""
+    rows = [(rec[1], rec[2], rec[3]) for rec in records if not (skip_ties and rec[3] == 0.5)]
+    if not rows:
+        return None
+    arr = np.asarray(rows, dtype=float)
+    i_idx = arr[:, 0].astype(int)
+    j_idx = arr[:, 1].astype(int)
+    y = arr[:, 2]
+    score = np.asarray(score, dtype=float)
+    diff = score[i_idx] - score[j_idx]
+    loss = y * np.logaddexp(0.0, -diff) + (1.0 - y) * np.logaddexp(0.0, diff)
+    return float(np.mean(loss))
+
+
 def human_sign_accuracy(score, true_scores=None, records=None, skip_ties=True):
     """Sign accuracy against a human target.
 

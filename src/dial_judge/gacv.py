@@ -269,6 +269,33 @@ def tr_product(hess_inv, emp_j):
     return float(np.trace(hess_inv @ emp_j))
 
 
+def btl_mle_exists(N, pairs):
+    """Existence of the (centered) BTL maximum-likelihood estimate.
+
+    Ford (1957) / Zermelo: the MLE exists and is finite iff the directed win
+    graph, with an edge i -> j whenever i beat j at least once (a tie counts in
+    both directions), is strongly connected over all N items. When it fails the
+    human-only endpoint is a separated fit whose training loss can be driven to
+    zero, so it is not an admissible GACV candidate.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    rows, cols = [], []
+    for i, j, n, y in pairs:
+        if y > 0:
+            rows.append(int(i))
+            cols.append(int(j))
+        if n - y > 0:
+            rows.append(int(j))
+            cols.append(int(i))
+    if not rows:
+        return False
+    graph = coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(N, N))
+    n_components, _ = connected_components(graph, directed=True, connection="strong")
+    return bool(n_components == 1)
+
+
 def select_lambda(
     N,
     K,
@@ -292,6 +319,8 @@ def select_lambda(
     guard=True,
     staged_fit=None,
     return_all=False,
+    endpoint_existence_check=True,
+    max_abs_score=10.0,
 ):
     """Fit DIAL at each lambda in the grid (plus the endpoints 0 and inf) and return the GACV minimizer.
 
@@ -301,6 +330,16 @@ def select_lambda(
     With `guard`, candidates whose fit is non-convergent or whose criterion
     Hessian is singular beyond the chart's exact invariances are excluded from
     the argmin (Assumption a2-gacv) and listed in `dropped`.
+    Every candidate, endpoints included, is marked irregular when its calibrated
+    score exceeds `max_abs_score` in absolute value (a finite-fit bound: a
+    centered log-odds of 10 is a pairwise probability above 0.99999, which no
+    human comparison sample of this size supports; this catches nearly separated
+    fits whose MLE exists but is unstable).
+    With `endpoint_existence_check` (default), the lam = 0 endpoint is also
+    marked irregular when the human-only BTL MLE does not exist
+    (`btl_mle_exists`), i.e. the human comparison graph is not strongly
+    connected and the human-only fit is separated. The flag is returned as
+    `human_only_exists`.
     The returned dict has `lam` in [0, inf]; for lam = 0 it carries the human-only
     score and for lam = inf the staged calibrated score.
     """
@@ -354,8 +393,13 @@ def select_lambda(
         h = fit_human_only_btl(N, human_pairs)
         B = make_centering_basis(N)
         e = endpoint_gacv(B[i_obs] - B[j_obs], h["s_H"], i_obs, j_obs, z_obs)
+        human_only_exists = btl_mle_exists(N, human_pairs)
+        if endpoint_existence_check:
+            e["regular"] = e["regular"] and human_only_exists
         candidates.append((0.0, e["gacv"], e["regular"], {**h, "lam": 0.0, "b": np.zeros(K), "mu": None, "V": None}))
 
+    if max_abs_score is not None:
+        candidates = [(c[0], c[1], c[2] and bool(np.max(np.abs(np.asarray(c[3]["s_H"], dtype=float))) <= max_abs_score), c[3]) for c in candidates]
     path = [{"lam": c[0], "gacv": c[1], "regular": c[2]} for c in candidates]
     admissible = [c for c in candidates if (c[2] or not guard)]
     if not admissible:
@@ -366,6 +410,7 @@ def select_lambda(
     selected["gacv"] = best[1]
     selected["gacv_path"] = path
     selected["dropped"] = [c[0] for c in candidates if guard and not c[2]]
+    selected["human_only_exists"] = bool(human_only_exists) if include_endpoints else None
     if return_all:
         selected["candidates"] = [(c[0], c[3]) for c in candidates]
     if with_uq and np.isfinite(best[0]) and best[0] > 0:

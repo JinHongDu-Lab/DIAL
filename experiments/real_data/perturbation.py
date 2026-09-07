@@ -16,5 +16,5 @@ def describe(dataset):
         ],
         "evaluation": "held_out_human_comparisons",
         "adapter": describe_adapter(),
-        "status": "scaffold",
+        "status": "superseded by experiments/real_data/robustness.py (--study robustness)",
     }

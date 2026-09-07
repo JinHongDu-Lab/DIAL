@@ -15,6 +15,13 @@ The collection kit stores two distinct notions of the judge's answer:
 
 Position-bias quantities read ``choice``; agreement with ``human_winner`` reads
 ``canonical_verdict``.  Swapping the two inverts the swapped half of the data.
+
+The judge identity is the results *directory* name, which is the panel alias
+the study was configured with.  Rows inside one directory may carry a variant
+alias in their own ``judge`` field (for example a ``-64tok`` suffix on gap-fill
+re-queries of the same model with a larger output cap); that value is kept in
+``judge_alias`` so the decoding change stays visible without splitting one
+judge into two.
 """
 
 from __future__ import annotations
@@ -135,6 +142,11 @@ def _row_to_record(row, dataset):
         "human_decisive": human in DECISIVE,
         "human_label": human,
         "judge_model": row.get("judge_model"),
+        "category": row.get("main_category"),
+        "language": row.get("language"),
+        "is_code": row.get("is_code"),
+        "judge_alias": row.get("judge_alias"),
+        "max_output_tokens": (row.get("inference") or {}).get("max_output_tokens"),
         "reasoning": reasoning,
         "reasoning_effort": reasoning_effort,
     }
@@ -170,7 +182,10 @@ def load_canonical(dataset, judges=None, data_root=None, use_cache=True, refresh
                     if not line:
                         continue
                     payload = json.loads(line)
-                    payload.setdefault("judge", judge)
+                    # The directory is the panel alias; a row-level variant
+                    # alias is kept separately (see module docstring).
+                    payload["judge_alias"] = payload.get("judge", judge)
+                    payload["judge"] = judge
                     rows.append(_row_to_record(payload, dataset))
         frame = pd.DataFrame(rows)
         if use_cache:

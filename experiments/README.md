@@ -44,8 +44,33 @@ must not be presented as estimator confidence intervals.
 ## Real-data modes
 
 - `motivation`: descriptive per-judge summary behind Figure 1(b). Implemented.
-- `perturbation`: controlled human/LLM subsampling, label flips, judge removal,
-  and order imbalance, evaluated on held-out human comparisons.
+- `robustness`: the real-data study of
+  `code/plan/2026-09-06-real-data-robustness-plan.md` (Section 22), implemented
+  in `real_data/robustness.py`. Five sweeps on one record-level protocol:
+  `order` (swapped-copy share with a canonical-first default), `noise`
+  (anti-consensus / position-only judges injected into a small panel under a
+  one-sided display), `budget` (human labels, balanced LLM data), `llm_budget`
+  (LLM rows subsampled at fixed human budgets), `spectest` (likelihood-ratio
+  test of `s_0 = alpha mu` on Arena human subsets), and `planner` (budget
+  prediction from a pilot via the test statistic). Methods: human-only,
+  pooled-LLM + scale, Consensus-cal (rank-0 staged), DIAL-mu (rank 0, joint
+  weighted likelihood, GACV weight), DIAL (rank and weight by GACV), DIAL-noDeb,
+  plus DIAL-mu at the MLE weight and the test-pool oracle weight as references.
+  `real_data/ja_reanalysis.py` rescored HJA's JA-Ranking judge files against our
+  human labels (`--ja`). Rows append to `results/real_robustness/<dataset>/rows.jsonl`,
+  `robustness_plot.py` aggregates, and `notebooks/real_data_robustness.ipynb`
+  draws `figures/fig_real_main.pdf` (position bias; robustness and verification),
+  `fig_real_efficiency.pdf`, and `fig_real_planner.pdf`.
+
+  ```bash
+  python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12
+  python run_real_data.py --study robustness --ja
+  python run_real_data.py --study robustness --clean-fit
+  ```
+
+  Results live under Dropbox; an append that overlaps a sync can leave the
+  data in a `rows (... conflicted copy ...).jsonl` next to an empty
+  `rows.jsonl`, so check for conflicted copies after a run.
 - `case_study`: full Arena 33K, MT-Bench, or PandaLM analysis.
 
 ### Motivation study
@@ -87,9 +112,11 @@ reasoning alone.
 Uncertainty is a bootstrap clustered on `record_id`, sharing one resample across
 judges within a study. Judges are reported in full but flagged
 `excluded_from_figure` when they tie on more than half their judgments
-(`ollama-stablelm2-12b-direct`) or cover less than half the study's records
-(`ollama-deepseek-r1-70b-low` on Arena and PandaLM). `ollama-deepseek-r1-32b-low`
-has no Arena responses at all.
+(`ollama-stablelm2-12b-direct`) or cover less than half the study's records.
+Since the 2026-09-06 collection update every one of the 22 judges covers all
+three studies, so the coverage rule no longer excludes anyone; the adapter keys
+each judge on its results directory and keeps a row-level alias variant (for
+example the `-64tok` gap-fill re-queries of Claude Haiku) in `judge_alias`.
 
 `notebooks/figure1b.ipynb` reads the saved CSVs and renders the figure.
 

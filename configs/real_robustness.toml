@@ -1,0 +1,89 @@
+# Real-data robustness study, design of code/plan/2026-09-06-real-data-robustness-plan.md Section 22.
+# LLM judgments are the recorded verdicts; the human test pool is the only ground truth.
+
+[study]
+name = "real_robustness"
+datasets = ["arena_33k", "mt_bench", "pandalm"]
+exclude_judges = ["ollama-stablelm2-12b-direct"]
+tie_rate_exclude = 0.5
+min_coverage = 0.5
+llm_ties = "drop"
+human_ties = "drop"
+# GACV candidate weights as multiples of n_L / n_0 (plus the endpoints 0 and infinity).
+lambda_multipliers = [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+# Candidate ranks for the rank-selected DIAL (and DIAL-noDeb): 0 .. rank_select_max.
+rank_select_max = 2
+position_noise_first_prob = 0.9
+
+# Test fraction and default fixed human budget per dataset.
+[arena_33k]
+f_test = 0.3
+n_0 = 300
+[mt_bench]
+f_test = 0.5
+n_0 = 80
+[pandalm]
+f_test = 0.5
+n_0 = 60
+
+# Judge panels by name; "all" is every kept judge.
+[panels]
+biased5 = ["ollama-mistral-small-3.2-24b-direct", "anthropic-claude-haiku-4.5-batch-direct", "ollama-qwen3-30b-a3b-direct", "ollama-glm4-9b-direct", "ollama-deepseek-r1-1.5b-low"]
+
+# A2: display-order design. Default order = canonical item first; level = share of swapped copies kept.
+[sweeps.order]
+datasets = ["arena_33k", "pandalm"]
+panels = ["biased5", "all"]
+levels = [0.0, 0.05, 0.2, 1.0]
+
+# B1: injected judges under a one-sided display (5% swaps) into the small biased panel.
+[sweeps.noise]
+datasets = ["arena_33k"]
+panels = ["biased5"]
+kinds = ["anti", "position"]
+levels = [0, 1, 2, 4, 8]
+rho_swap = 0.05
+
+# B1': injected judges when LLM judgments are scarce: the five-judge panel is subsampled to n_L balanced rows
+# first, then m synthetic judges are added answering the retained records; n_0 fixed by n_0_fixed.
+[sweeps.noise_scarce]
+datasets = ["arena_33k"]
+panels = ["biased5"]
+kinds = ["anti", "position"]
+levels = [0, 1, 2, 4, 8]
+rho_swap = 1.0
+n_L_base = 2000
+n_0_fixed = 1000
+
+# C1: human budget with the as-collected balanced LLM data; level = n_0 (-1 = all train labels).
+[sweeps.budget]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
+panels = ["all"]
+rho_swap = 1.0
+[sweeps.budget.levels]
+arena_33k = [50, 100, 200, 400, 800, 1600, -1]
+mt_bench = [20, 40, 80, 160, 320, -1]
+pandalm = [20, 40, 80, 160, 320, -1]
+
+# C2: LLM budget (rows subsampled from the balanced data) at two human budgets.
+[sweeps.llm_budget]
+datasets = ["arena_33k"]
+panels = ["all", "biased5"]
+rho_swap = 1.0
+levels = [500, 1000, 2000, 5000, 20000]
+n_0_grid = [300, 1000]
+
+# B2: specification test of s_0 = alpha mu on Arena human subsets; level = n_0.
+[sweeps.spectest]
+settings = ["english_global", "nonenglish_global", "nonenglish_subset"]
+# n_0 must let the unrestricted BTL on 20 items exist; levels above the subset's train pool collapse to "all".
+levels = [100, 200, 400, 800, 1600]
+f_test = 0.3
+
+# Planner: estimate the anchor misspecification from a pilot human sample and predict the budget curves.
+[sweeps.planner]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
+[sweeps.planner.levels]
+arena_33k = [100, 200, 400]
+mt_bench = [40, 80, 160]
+pandalm = [40, 80, 160]

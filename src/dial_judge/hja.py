@@ -855,18 +855,28 @@ def uncertainty_quantification(gamma, mu, U, V, n_ijk, targets, alpha=0.05, rcon
     }
 
 
-def select_rank_by_bic(N, K, n_ijk, y_ijk, candidate_ranks=None, max_steps=800, tol=1e-5):
+def select_rank_by_bic(N, K, n_ijk, y_ijk, candidate_ranks=None, max_steps=800, tol=1e-5, n_order=None, y_order=None):
+    """BIC over candidate ranks on the LLM likelihood.
+
+    With `n_order`/`y_order` the order-effect BTL is fitted at every rank and
+    the K position effects are added to the parameter count; that offset is
+    constant in r, so it changes the reported BIC values but not the argmin.
+    """
     r_max = min(K - 1, N - 2)
     if candidate_ranks is None:
         candidate_ranks = list(range(r_max + 1))
     results = {}
+    if n_order is not None and n_ijk is None:
+        n_ijk, y_ijk = collapse_order_counts(n_order, y_order)
     n_total = float(np.sum(n_ijk[:, np.triu_indices(N, 1)[0], np.triu_indices(N, 1)[1]]))
     if n_total <= 0:
         raise ValueError("BIC selection requires positive total comparisons")
 
     for r in candidate_ranks:
-        mu, gamma, U, V, fit_info = estimate_parameters(N, K, r, n_ijk, y_ijk, max_steps=max_steps, tol=tol, tau=10.0)
-        d_r = r * (K + N - r - 3)
+        mu, gamma, U, V, fit_info = estimate_parameters(
+            N, K, r, n_ijk, y_ijk, max_steps=max_steps, tol=tol, tau=10.0, n_order=n_order, y_order=y_order
+        )
+        d_r = r * (K + N - r - 3) + (K if n_order is not None else 0)
         bic = 2.0 * fit_info["nll"] + d_r * np.log(n_total)
         results[r] = {
             "bic": float(bic),

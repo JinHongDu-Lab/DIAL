@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from experiments.real_data import case_study, motivation, perturbation
+from experiments.real_data import case_study, motivation, perturbation, robustness
 
 
 DATASETS = ("arena_33k", "mt_bench", "pandalm")
@@ -15,10 +15,20 @@ STUDIES = {
     "perturbation": perturbation,
     "case_study": case_study,
     "motivation": motivation,
+    "robustness": robustness,
 }
 
 
 def parse_args():
+    import sys
+
+    # The robustness study has its own sweep/seed interface; hand it every
+    # argument except the study selector.
+    if "--study" in sys.argv and sys.argv[sys.argv.index("--study") + 1] == "robustness":
+        rest = [a for n, a in enumerate(sys.argv[1:]) if a != "--study" and sys.argv[1:][n - 1] != "--study"]
+        robustness.main(rest)
+        raise SystemExit(0)
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--study", choices=sorted(STUDIES))
     parser.add_argument(

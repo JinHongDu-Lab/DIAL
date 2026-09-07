@@ -277,3 +277,35 @@ def joint_sandwich(
         "n_L": n_L,
         "lam": lam,
     }
+
+
+def calibration_restriction_test(N, human_pairs, W, maxiter=1000):
+    """Likelihood-ratio test of the calibration restriction s_0 = W c against the unrestricted centered BTL.
+
+    Statistic 2 { L_H(c-hat; W) - L_H^full(s-hat_0) } with L_H the total human negative
+    log-likelihood, compared with chi-square on (N - 1) - d degrees of freedom, d = W.shape[1]
+    (manuscript app:spec-test; W treated as known, i.e. the n_0 / n_L -> 0 regime).
+    Returns the statistic, degrees of freedom, p-value, both fitted scores, and whether the
+    unrestricted MLE exists (`btl_mle_exists`); when it does not, the unrestricted fit is a
+    separated maximizer and the statistic is inflated.
+    """
+    from scipy.stats import chi2
+
+    from .dial_model import fit_human_calibration
+    from .gacv import btl_mle_exists
+    from .hja import centered_btl_loss_and_grad_from_pairs, fit_centered_btl_from_pairs
+
+    W = np.asarray(W, dtype=float)
+    if W.ndim == 1:
+        W = W.reshape(-1, 1)
+    d = W.shape[1]
+    alpha, a = fit_human_calibration(W[:, 0], W[:, 1:], human_pairs, maxiter=maxiter)
+    s_restricted = W @ np.concatenate([[alpha], a])
+    exists = btl_mle_exists(N, human_pairs)
+    s_full = fit_centered_btl_from_pairs(N, human_pairs, maxiter=maxiter)
+    nll_r = centered_btl_loss_and_grad_from_pairs(N, human_pairs, s_restricted)[0]
+    nll_u = centered_btl_loss_and_grad_from_pairs(N, human_pairs, s_full)[0]
+    stat = max(0.0, 2.0 * (nll_r - nll_u))
+    df = (N - 1) - d
+    return {"stat": float(stat), "df": int(df), "pvalue": float(chi2.sf(stat, df)) if df > 0 else float("nan"),
+            "s_restricted": s_restricted, "s_full": s_full, "human_only_exists": bool(exists), "coefficients": np.concatenate([[alpha], a])}
