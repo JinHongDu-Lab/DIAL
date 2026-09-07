@@ -1,0 +1,69 @@
+\begin{table}[!t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Injected-judge sweeps, all levels, five biased Arena judges; mean $\pm$ s.e. over 50 splits.}
+\label{tab:real-noise}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+ & Human-only & Pooled-LLM & Consensus-cal & DIAL & DIAL-noDeb \\
+\midrule
+\multicolumn{6}{l}{\emph{Scarce LLM data (2,000 rows, $n_0=1{,}000$), anti-consensus judges injected (Kendall $\tau$)}} \\
+\quad $m=0$ & 0.818{\scriptsize$\pm$0.006} & 0.705{\scriptsize$\pm$0.011} & 0.748{\scriptsize$\pm$0.008} & \textbf{0.834{\scriptsize$\pm$0.006}} & \textbf{0.833{\scriptsize$\pm$0.006}} \\
+\quad $m=1$ & 0.818{\scriptsize$\pm$0.006} & 0.674{\scriptsize$\pm$0.012} & 0.728{\scriptsize$\pm$0.009} & \textbf{0.832{\scriptsize$\pm$0.006}} & 0.825{\scriptsize$\pm$0.005} \\
+\quad $m=2$ & 0.818{\scriptsize$\pm$0.006} & 0.620{\scriptsize$\pm$0.015} & 0.705{\scriptsize$\pm$0.012} & \textbf{0.829{\scriptsize$\pm$0.006}} & 0.821{\scriptsize$\pm$0.006} \\
+\quad $m=4$ & \textbf{0.818{\scriptsize$\pm$0.006}} & 0.291{\scriptsize$\pm$0.031} & 0.466{\scriptsize$\pm$0.037} & \textbf{0.817{\scriptsize$\pm$0.006}} & \textbf{0.818{\scriptsize$\pm$0.006}} \\
+\quad $m=8$ & \textbf{0.818{\scriptsize$\pm$0.006}} & 0.493{\scriptsize$\pm$0.024} & 0.660{\scriptsize$\pm$0.017} & \textbf{0.821{\scriptsize$\pm$0.006}} & \textbf{0.818{\scriptsize$\pm$0.006}} \\
+\midrule
+\multicolumn{6}{l}{\emph{Scarce LLM data (2,000 rows, $n_0=1{,}000$), anti-consensus judges injected (excess log loss)}} \\
+\quad $m=0$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0360{\scriptsize$\pm$0.0015} & 0.0328{\scriptsize$\pm$0.0040} & \textbf{0.0144{\scriptsize$\pm$0.0007}} & 0.0151{\scriptsize$\pm$0.0007} \\
+\quad $m=1$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0409{\scriptsize$\pm$0.0019} & 0.0360{\scriptsize$\pm$0.0040} & \textbf{0.0149{\scriptsize$\pm$0.0007}} & 0.0156{\scriptsize$\pm$0.0007} \\
+\quad $m=2$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0527{\scriptsize$\pm$0.0029} & 0.0392{\scriptsize$\pm$0.0036} & \textbf{0.0151{\scriptsize$\pm$0.0007}} & 0.0162{\scriptsize$\pm$0.0008} \\
+\quad $m=4$ & \textbf{0.0169{\scriptsize$\pm$0.0007}} & 0.1214{\scriptsize$\pm$0.0053} & 0.0897{\scriptsize$\pm$0.0068} & \textbf{0.0169{\scriptsize$\pm$0.0007}} & \textbf{0.0169{\scriptsize$\pm$0.0007}} \\
+\quad $m=8$ & \textbf{0.0169{\scriptsize$\pm$0.0007}} & 0.0795{\scriptsize$\pm$0.0046} & 0.0465{\scriptsize$\pm$0.0038} & \textbf{0.0163{\scriptsize$\pm$0.0007}} & \textbf{0.0169{\scriptsize$\pm$0.0007}} \\
+\midrule
+\multicolumn{6}{l}{\emph{Scarce LLM data (2,000 rows, $n_0=1{,}000$), position-only judges injected (Kendall $\tau$)}} \\
+\quad $m=0$ & 0.818{\scriptsize$\pm$0.006} & 0.705{\scriptsize$\pm$0.011} & 0.748{\scriptsize$\pm$0.008} & \textbf{0.834{\scriptsize$\pm$0.006}} & \textbf{0.833{\scriptsize$\pm$0.006}} \\
+\quad $m=1$ & 0.818{\scriptsize$\pm$0.006} & 0.661{\scriptsize$\pm$0.013} & 0.746{\scriptsize$\pm$0.008} & \textbf{0.834{\scriptsize$\pm$0.006}} & \textbf{0.833{\scriptsize$\pm$0.006}} \\
+\quad $m=2$ & 0.818{\scriptsize$\pm$0.006} & 0.626{\scriptsize$\pm$0.012} & 0.746{\scriptsize$\pm$0.007} & \textbf{0.835{\scriptsize$\pm$0.006}} & \textbf{0.831{\scriptsize$\pm$0.006}} \\
+\quad $m=4$ & 0.818{\scriptsize$\pm$0.006} & 0.549{\scriptsize$\pm$0.015} & 0.745{\scriptsize$\pm$0.008} & \textbf{0.831{\scriptsize$\pm$0.006}} & \textbf{0.833{\scriptsize$\pm$0.006}} \\
+\quad $m=8$ & 0.818{\scriptsize$\pm$0.006} & 0.466{\scriptsize$\pm$0.019} & 0.748{\scriptsize$\pm$0.008} & \textbf{0.833{\scriptsize$\pm$0.006}} & \textbf{0.832{\scriptsize$\pm$0.006}} \\
+\midrule
+\multicolumn{6}{l}{\emph{Scarce LLM data (2,000 rows, $n_0=1{,}000$), position-only judges injected (excess log loss)}} \\
+\quad $m=0$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0360{\scriptsize$\pm$0.0015} & 0.0328{\scriptsize$\pm$0.0040} & \textbf{0.0144{\scriptsize$\pm$0.0007}} & 0.0151{\scriptsize$\pm$0.0007} \\
+\quad $m=1$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0469{\scriptsize$\pm$0.0021} & 0.0330{\scriptsize$\pm$0.0040} & \textbf{0.0144{\scriptsize$\pm$0.0007}} & 0.0152{\scriptsize$\pm$0.0007} \\
+\quad $m=2$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0549{\scriptsize$\pm$0.0025} & 0.0329{\scriptsize$\pm$0.0040} & \textbf{0.0144{\scriptsize$\pm$0.0007}} & 0.0152{\scriptsize$\pm$0.0007} \\
+\quad $m=4$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0714{\scriptsize$\pm$0.0033} & 0.0330{\scriptsize$\pm$0.0040} & \textbf{0.0144{\scriptsize$\pm$0.0007}} & 0.0152{\scriptsize$\pm$0.0007} \\
+\quad $m=8$ & 0.0169{\scriptsize$\pm$0.0007} & 0.0906{\scriptsize$\pm$0.0036} & 0.0335{\scriptsize$\pm$0.0040} & \textbf{0.0144{\scriptsize$\pm$0.0007}} & 0.0152{\scriptsize$\pm$0.0007} \\
+\midrule
+\multicolumn{6}{l}{\emph{Abundant LLM data ($n_0=300$), anti-consensus judges injected (excess log loss)}} \\
+\quad $m=0$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0205{\scriptsize$\pm$0.0006} & \textbf{0.0142{\scriptsize$\pm$0.0006}} & 0.0158{\scriptsize$\pm$0.0011} & 0.0173{\scriptsize$\pm$0.0010} \\
+\quad $m=1$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0423{\scriptsize$\pm$0.0039} & \textbf{0.0150{\scriptsize$\pm$0.0006}} & 0.0168{\scriptsize$\pm$0.0014} & 0.0239{\scriptsize$\pm$0.0012} \\
+\quad $m=2$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0792{\scriptsize$\pm$0.0047} & \textbf{0.0177{\scriptsize$\pm$0.0009}} & 0.0197{\scriptsize$\pm$0.0019} & 0.0241{\scriptsize$\pm$0.0016} \\
+\quad $m=4$ & 0.0625{\scriptsize$\pm$0.0100} & 0.1382{\scriptsize$\pm$0.0033} & 0.0631{\scriptsize$\pm$0.0085} & \textbf{0.0405{\scriptsize$\pm$0.0033}} & \textbf{0.0398{\scriptsize$\pm$0.0034}} \\
+\quad $m=8$ & 0.0625{\scriptsize$\pm$0.0100} & 0.1081{\scriptsize$\pm$0.0063} & \textbf{0.0286{\scriptsize$\pm$0.0030}} & 0.0318{\scriptsize$\pm$0.0030} & 0.0356{\scriptsize$\pm$0.0036} \\
+\midrule
+\multicolumn{6}{l}{\emph{Abundant LLM data ($n_0=300$), anti-consensus judges injected (Kendall $\tau$)}} \\
+\quad $m=0$ & 0.717{\scriptsize$\pm$0.011} & 0.817{\scriptsize$\pm$0.006} & \textbf{0.847{\scriptsize$\pm$0.005}} & \textbf{0.844{\scriptsize$\pm$0.007}} & 0.826{\scriptsize$\pm$0.007} \\
+\quad $m=1$ & 0.717{\scriptsize$\pm$0.011} & 0.674{\scriptsize$\pm$0.025} & \textbf{0.840{\scriptsize$\pm$0.005}} & \textbf{0.840{\scriptsize$\pm$0.007}} & 0.804{\scriptsize$\pm$0.007} \\
+\quad $m=2$ & 0.717{\scriptsize$\pm$0.011} & 0.484{\scriptsize$\pm$0.018} & 0.820{\scriptsize$\pm$0.007} & \textbf{0.829{\scriptsize$\pm$0.008}} & 0.798{\scriptsize$\pm$0.009} \\
+\quad $m=4$ & 0.717{\scriptsize$\pm$0.011} & 0.196{\scriptsize$\pm$0.022} & 0.605{\scriptsize$\pm$0.045} & \textbf{0.734{\scriptsize$\pm$0.016}} & \textbf{0.742{\scriptsize$\pm$0.017}} \\
+\quad $m=8$ & 0.717{\scriptsize$\pm$0.011} & 0.349{\scriptsize$\pm$0.028} & \textbf{0.780{\scriptsize$\pm$0.014}} & \textbf{0.780{\scriptsize$\pm$0.013}} & 0.748{\scriptsize$\pm$0.018} \\
+\midrule
+\multicolumn{6}{l}{\emph{Abundant LLM data ($n_0=300$), position-only judges injected (excess log loss)}} \\
+\quad $m=0$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0205{\scriptsize$\pm$0.0006} & \textbf{0.0142{\scriptsize$\pm$0.0006}} & 0.0158{\scriptsize$\pm$0.0011} & 0.0173{\scriptsize$\pm$0.0010} \\
+\quad $m=1$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0725{\scriptsize$\pm$0.0012} & \textbf{0.0141{\scriptsize$\pm$0.0006}} & 0.0156{\scriptsize$\pm$0.0012} & 0.0287{\scriptsize$\pm$0.0016} \\
+\quad $m=2$ & 0.0625{\scriptsize$\pm$0.0100} & 0.1120{\scriptsize$\pm$0.0014} & \textbf{0.0142{\scriptsize$\pm$0.0006}} & 0.0151{\scriptsize$\pm$0.0009} & 0.0367{\scriptsize$\pm$0.0020} \\
+\quad $m=4$ & 0.0625{\scriptsize$\pm$0.0100} & 0.1426{\scriptsize$\pm$0.0015} & \textbf{0.0142{\scriptsize$\pm$0.0006}} & 0.0155{\scriptsize$\pm$0.0010} & 0.0394{\scriptsize$\pm$0.0022} \\
+\quad $m=8$ & 0.0625{\scriptsize$\pm$0.0100} & 0.1555{\scriptsize$\pm$0.0015} & \textbf{0.0145{\scriptsize$\pm$0.0006}} & 0.0158{\scriptsize$\pm$0.0012} & 0.0457{\scriptsize$\pm$0.0024} \\
+\midrule
+\multicolumn{6}{l}{\emph{Abundant LLM data ($n_0=300$), position-only judges injected (Kendall $\tau$)}} \\
+\quad $m=0$ & 0.717{\scriptsize$\pm$0.011} & 0.817{\scriptsize$\pm$0.006} & \textbf{0.847{\scriptsize$\pm$0.005}} & \textbf{0.844{\scriptsize$\pm$0.007}} & 0.826{\scriptsize$\pm$0.007} \\
+\quad $m=1$ & 0.717{\scriptsize$\pm$0.011} & 0.460{\scriptsize$\pm$0.005} & \textbf{0.851{\scriptsize$\pm$0.005}} & \textbf{0.849{\scriptsize$\pm$0.007}} & 0.779{\scriptsize$\pm$0.008} \\
+\quad $m=2$ & 0.717{\scriptsize$\pm$0.011} & 0.343{\scriptsize$\pm$0.005} & \textbf{0.848{\scriptsize$\pm$0.005}} & \textbf{0.847{\scriptsize$\pm$0.006}} & 0.737{\scriptsize$\pm$0.010} \\
+\quad $m=4$ & 0.717{\scriptsize$\pm$0.011} & 0.201{\scriptsize$\pm$0.004} & \textbf{0.849{\scriptsize$\pm$0.006}} & \textbf{0.849{\scriptsize$\pm$0.006}} & 0.735{\scriptsize$\pm$0.010} \\
+\quad $m=8$ & 0.717{\scriptsize$\pm$0.011} & 0.090{\scriptsize$\pm$0.007} & \textbf{0.844{\scriptsize$\pm$0.005}} & \textbf{0.845{\scriptsize$\pm$0.006}} & 0.711{\scriptsize$\pm$0.013} \\
+\bottomrule
+\end{tabular}}
+\end{table}

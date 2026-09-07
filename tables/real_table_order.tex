@@ -1,0 +1,37 @@
+\begin{table}[!t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Swapped-copy share sweep (Figure 3 protocol), all levels: excess held-out log loss, mean $\pm$ s.e. over 50 splits.}
+\label{tab:real-order}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+ & Human-only & Pooled-LLM & Consensus-cal & DIAL & DIAL-noDeb \\
+\midrule
+\multicolumn{6}{l}{\emph{Swapped-copy share $\rho_{\mathrm{swap}}$, Chatbot Arena, 5 biased judges, $n_0=$300 (excess)}} \\
+\quad $\rho_{\mathrm{swap}}=0$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0219{\scriptsize$\pm$0.0007} & \textbf{0.0144{\scriptsize$\pm$0.0006}} & 0.0162{\scriptsize$\pm$0.0012} & 0.0182{\scriptsize$\pm$0.0010} \\
+\quad $\rho_{\mathrm{swap}}=0.05$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0205{\scriptsize$\pm$0.0006} & \textbf{0.0142{\scriptsize$\pm$0.0006}} & 0.0158{\scriptsize$\pm$0.0011} & 0.0173{\scriptsize$\pm$0.0010} \\
+\quad $\rho_{\mathrm{swap}}=0.2$ & 0.0625{\scriptsize$\pm$0.0100} & 0.0176{\scriptsize$\pm$0.0006} & \textbf{0.0138{\scriptsize$\pm$0.0006}} & 0.0152{\scriptsize$\pm$0.0011} & 0.0172{\scriptsize$\pm$0.0013} \\
+\quad $\rho_{\mathrm{swap}}=1$ & 0.0625{\scriptsize$\pm$0.0100} & \textbf{0.0131{\scriptsize$\pm$0.0006}} & \textbf{0.0131{\scriptsize$\pm$0.0006}} & 0.0145{\scriptsize$\pm$0.0008} & 0.0147{\scriptsize$\pm$0.0011} \\
+\midrule
+\multicolumn{6}{l}{\emph{Swapped-copy share $\rho_{\mathrm{swap}}$, PandaLM, 5 biased judges, $n_0=$60 (excess)}} \\
+\quad $\rho_{\mathrm{swap}}=0$ & 0.0489{\scriptsize$\pm$0.0051} & 0.0421{\scriptsize$\pm$0.0023} & \textbf{0.0260{\scriptsize$\pm$0.0027}} & 0.0321{\scriptsize$\pm$0.0043} & 0.0341{\scriptsize$\pm$0.0040} \\
+\quad $\rho_{\mathrm{swap}}=0.05$ & 0.0489{\scriptsize$\pm$0.0051} & 0.0390{\scriptsize$\pm$0.0023} & \textbf{0.0238{\scriptsize$\pm$0.0024}} & 0.0310{\scriptsize$\pm$0.0043} & 0.0362{\scriptsize$\pm$0.0043} \\
+\quad $\rho_{\mathrm{swap}}=0.2$ & 0.0489{\scriptsize$\pm$0.0051} & 0.0329{\scriptsize$\pm$0.0023} & \textbf{0.0224{\scriptsize$\pm$0.0025}} & 0.0285{\scriptsize$\pm$0.0042} & 0.0352{\scriptsize$\pm$0.0043} \\
+\quad $\rho_{\mathrm{swap}}=1$ & 0.0489{\scriptsize$\pm$0.0051} & \textbf{0.0189{\scriptsize$\pm$0.0022}} & \textbf{0.0190{\scriptsize$\pm$0.0023}} & 0.0273{\scriptsize$\pm$0.0044} & 0.0262{\scriptsize$\pm$0.0041} \\
+\midrule
+\multicolumn{6}{l}{\emph{Swapped-copy share $\rho_{\mathrm{swap}}$, Chatbot Arena, all judges, $n_0=$300 (excess)}} \\
+\quad $\rho_{\mathrm{swap}}=0$ & 0.0625{\scriptsize$\pm$0.0100} & \textbf{0.0109{\scriptsize$\pm$0.0005}} & \textbf{0.0106{\scriptsize$\pm$0.0005}} & 0.0115{\scriptsize$\pm$0.0008} & 0.0116{\scriptsize$\pm$0.0007} \\
+\quad $\rho_{\mathrm{swap}}=0.05$ & 0.0625{\scriptsize$\pm$0.0100} & \textbf{0.0107{\scriptsize$\pm$0.0005}} & \textbf{0.0105{\scriptsize$\pm$0.0005}} & 0.0113{\scriptsize$\pm$0.0007} & 0.0117{\scriptsize$\pm$0.0008} \\
+\quad $\rho_{\mathrm{swap}}=0.2$ & 0.0625{\scriptsize$\pm$0.0100} & \textbf{0.0104{\scriptsize$\pm$0.0005}} & \textbf{0.0104{\scriptsize$\pm$0.0005}} & 0.0111{\scriptsize$\pm$0.0007} & 0.0114{\scriptsize$\pm$0.0007} \\
+\quad $\rho_{\mathrm{swap}}=1$ & 0.0625{\scriptsize$\pm$0.0100} & \textbf{0.0100{\scriptsize$\pm$0.0005}} & \textbf{0.0101{\scriptsize$\pm$0.0005}} & \textbf{0.0103{\scriptsize$\pm$0.0006}} & \textbf{0.0105{\scriptsize$\pm$0.0006}} \\
+\midrule
+\multicolumn{6}{l}{\emph{Swapped-copy share $\rho_{\mathrm{swap}}$, PandaLM, all judges, $n_0=$60 (excess)}} \\
+\quad $\rho_{\mathrm{swap}}=0$ & 0.0489{\scriptsize$\pm$0.0051} & \textbf{0.0183{\scriptsize$\pm$0.0022}} & \textbf{0.0188{\scriptsize$\pm$0.0022}} & 0.0257{\scriptsize$\pm$0.0041} & 0.0261{\scriptsize$\pm$0.0043} \\
+\quad $\rho_{\mathrm{swap}}=0.05$ & 0.0489{\scriptsize$\pm$0.0051} & \textbf{0.0182{\scriptsize$\pm$0.0022}} & \textbf{0.0176{\scriptsize$\pm$0.0021}} & 0.0257{\scriptsize$\pm$0.0040} & 0.0265{\scriptsize$\pm$0.0042} \\
+\quad $\rho_{\mathrm{swap}}=0.2$ & 0.0489{\scriptsize$\pm$0.0051} & \textbf{0.0178{\scriptsize$\pm$0.0022}} & \textbf{0.0172{\scriptsize$\pm$0.0021}} & 0.0256{\scriptsize$\pm$0.0043} & 0.0258{\scriptsize$\pm$0.0042} \\
+\quad $\rho_{\mathrm{swap}}=1$ & 0.0489{\scriptsize$\pm$0.0051} & \textbf{0.0172{\scriptsize$\pm$0.0022}} & \textbf{0.0171{\scriptsize$\pm$0.0022}} & 0.0258{\scriptsize$\pm$0.0046} & 0.0247{\scriptsize$\pm$0.0039} \\
+\bottomrule
+\end{tabular}}
+\end{table}

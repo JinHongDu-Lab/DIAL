@@ -58,9 +58,12 @@ python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 
   `real_data/ja_reanalysis.py` rescored HJA's JA-Ranking judge files against our
   human labels (`--ja`). Rows append to `results/real_robustness/<dataset>/rows.jsonl`,
   `robustness_plot.py` aggregates, and `notebooks/real_data_robustness.ipynb`
-  draws `figures/fig_real_main.pdf` (position bias; robustness and verification),
-  `fig_real_noise_abundant.pdf`, `fig_real_efficiency.pdf`, `fig_real_planner.pdf`,
-  and `fig_real_diagnostics.pdf`.
+  draws `figures/fig_real_main.pdf` (three panels: LLM budget on Kendall tau,
+  specification test, judge-level position effects), `fig_real_efficiency.pdf`,
+  `fig_real_planner.pdf`, and `fig_real_diagnostics.pdf`, and writes the booktabs
+  tables `tables/real_table_{main,order,noise,budget,llmbudget,ja}.tex` (Table 1
+  of the paper and its full appendix versions; flat comparisons are tabulated
+  rather than plotted).
 
   ```bash
   python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12
