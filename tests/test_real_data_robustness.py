@@ -154,3 +154,12 @@ def test_paired_design_across_levels(monkeypatch):
     assert {"human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel"} <= methods
     dm = next(r for r in a if r["method"] == "dial_mu"); assert dm["r"] == 1
     assert all("error" not in r for r in a), [r["error"][:80] for r in a if "error" in r]
+
+
+def test_drop_empty_judges():
+    import pandas as pd
+    llm = pd.DataFrame(dict(k=[0, 0, 2, 5, 5], i=[0] * 5, j=[1] * 5, a=[1, -1, 1, 1, -1], y=[1.0, 0.0, 1.0, 1.0, 0.0]))
+    out, K, K_real, dropped = rb.drop_empty_judges(llm, K=6, K_real=4)
+    assert (K, K_real, dropped) == (3, 2, 3) and sorted(out.k.unique()) == [0, 1, 2]
+    same, K2, Kr2, d2 = rb.drop_empty_judges(out, K=3, K_real=2)
+    assert d2 == 0 and K2 == 3 and Kr2 == 2

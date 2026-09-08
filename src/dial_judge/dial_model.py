@@ -33,6 +33,12 @@ from .hja import (
     reanchor,
     reduce_item_block,
     reduce_judge_block,
+    accept_block_step,
+    chart_bounds,
+    count_at_bound,
+    count_chart_at_bound,
+    position_bounds,
+    projected_gradient,
 )
 
 
@@ -123,7 +129,18 @@ def fit_human_calibration(mu, V, pairs, initial=None, maxiter=1000):
 
     result = minimize(objective, x0=x0, method="L-BFGS-B", jac=True, options={"maxiter": maxiter, "gtol": 1e-8})
     if not result.success:
-        raise RuntimeError(f"human calibration fit failed: {result.message}")
+        # Line-search breakdown happens when the calibration likelihood is separated (alpha or a
+        # runs off) or flat to machine precision. Retry on a box that keeps the calibrated score
+        # within the finite-fit range |s| <= 25, and accept a point whose projected gradient is
+        # small relative to the sample size; the GACV guards flag such fits downstream.
+        n_h = float(np.sum(pair_arrays[2]))
+        scale = np.concatenate([[np.max(np.abs(mu))], np.max(np.abs(V), axis=0) if r else []])
+        bounds = [(-25.0 / max(sc, 1e-8), 25.0 / max(sc, 1e-8)) for sc in scale]
+        result = minimize(objective, x0=np.clip(x0, [lo for lo, _ in bounds], [hi for _, hi in bounds]), method="L-BFGS-B", jac=True, bounds=bounds, options={"maxiter": maxiter, "gtol": 1e-8})
+        if not result.success:
+            pg = np.linalg.norm(projected_gradient(result.x, result.jac, bounds)) / max(n_h, 1.0)
+            if pg > 1e-6:
+                raise RuntimeError(f"human calibration fit failed: {result.message} (projected gradient {pg:.2e})")
     return float(result.x[0]), result.x[1:].copy()
 
 
@@ -161,7 +178,7 @@ def calibrated_score_uq(alpha, a, mu, V, pairs, alpha_level=0.05, rcond=1e-8):
     }
 
 
-def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L, maxiter=400, gtol=1e-8):
+def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L, maxiter=2000, gtol=1e-8):
     """
     L-BFGS on the weighted criterion q_lambda over the centering-reduced factor
     chart (gamma_red, U_red, [b], mu_red, V_red, alpha, a), followed by ReAnchor
@@ -178,7 +195,8 @@ def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_orde
     def fg(z):
         return q_lambda_grad(z, N, K, r, jb, ib, use_order, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L)
 
-    res = minimize(fg, z0, jac=True, method="L-BFGS-B", options={"maxiter": maxiter, "gtol": gtol, "ftol": 1e-15})
+    bounds = chart_bounds(z0.size)
+    res = minimize(fg, z0, jac=True, method="L-BFGS-B", bounds=bounds, options={"maxiter": maxiter, "gtol": gtol, "ftol": 1e-15})
     gamma, mu, U, V, b, alpha, a = unpack_reduced(res.x, N, K, r, jb, ib, use_order)
     a = np.atleast_1d(a)
     if r > 0:
@@ -186,8 +204,11 @@ def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_orde
         gamma, mu, U, V = reanchor(gamma, mu, U, V)
         coef, *_ = np.linalg.lstsq(calibration_design(mu, calibration_columns(V, a)), target, rcond=None)
         alpha, a = float(coef[0]), coef[1:]
-    grad_norm = float(np.linalg.norm(res.jac))
-    info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "total_loss": float(res.fun)}
+    grad_norm = float(np.linalg.norm(projected_gradient(res.x, res.jac, bounds)))
+    S = np.outer(gamma, mu) + U @ V.T
+    info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "total_loss": float(res.fun),
+            "b_at_bound": count_at_bound(b) if use_order else 0, "n_at_bound": count_chart_at_bound(res.x, bounds),
+            "max_abs_S": float(np.max(np.abs(S))), "max_gamma": float(np.max(np.abs(gamma)))}
     return gamma, mu, U, V, (b if use_order else np.zeros(K)), alpha, a, info
 
 
@@ -270,6 +291,7 @@ def joint(
         return (l_h / n_0) + lam * (l_l / n_L), l_l, l_h
 
     history = []
+    inner_limit_hits = 0
     for step in range(max_steps):
         step_index = step + 1
         current_gamma_reduced, current_U_reduced = reduce_judge_block(gamma, U)
@@ -306,10 +328,10 @@ def joint(
             x0=current_judge_block,
             method="L-BFGS-B",
             jac=True,
+            bounds=chart_bounds(current_judge_block.size),
             options={"maxiter": inner_maxiter, "gtol": 1e-5, "maxls": 50},
         )
-        if not result_j.success:
-            raise RuntimeError(f"joint judge-block update failed: {result_j.message}")
+        inner_limit_hits += accept_block_step(result_j, objective_judge(current_judge_block)[0], "joint judge-block update")
         gamma_tilde = np.ones(K, dtype=float) + judge_basis @ result_j.x[:n_gamma]
         U_tilde = judge_basis @ result_j.x[n_gamma: n_gamma + n_U].reshape(K - 1, r)
         b_tilde = result_j.x[n_gamma + n_U:].copy() if use_order else np.zeros(K, dtype=float)
@@ -346,10 +368,10 @@ def joint(
             x0=current_item_block,
             method="L-BFGS-B",
             jac=True,
+            bounds=chart_bounds(current_item_block.size),
             options={"maxiter": inner_maxiter, "gtol": 1e-5, "maxls": 50},
         )
-        if not result_i.success:
-            raise RuntimeError(f"joint item-block update failed: {result_i.message}")
+        inner_limit_hits += accept_block_step(result_i, objective_item(current_item_block)[0], "joint item-block update")
         mu_tilde = item_basis @ result_i.x[: N - 1]
         V_tilde = item_basis @ result_i.x[N - 1: N - 1 + (N - 1) * r].reshape(N - 1, r)
         alpha_tilde = float(result_i.x[N - 1 + (N - 1) * r])
@@ -410,6 +432,8 @@ def joint(
             "converged": bool(polish_info["polish_converged"]) if polish else alternating_converged,
             "history": history,
             "total_loss": float(polish_info["total_loss"]) if polish else (float(history[-1]["total_loss"]) if history else None),
+            "inner_limit_hits": int(inner_limit_hits),
+            "b_at_bound": count_at_bound(b) if use_order else 0,
             **polish_info,
         },
     }

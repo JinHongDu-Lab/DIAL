@@ -196,6 +196,17 @@ def draw_budget(human, n_0, rng):
     return human.iloc[np.sort(idx)].reset_index(drop=True)
 
 
+def drop_empty_judges(llm, K, K_real):
+    """Remove judges left with no rows (after subsampling) and renumber the rest, keeping the
+    real judges before the injected ones. Returns (llm, K, K_real, n_dropped)."""
+    present = np.sort(llm["k"].unique().astype(int))
+    if present.size == K:
+        return llm, K, K_real, 0
+    remap = {int(old): new for new, old in enumerate(present)}
+    llm = llm.assign(k=llm["k"].map(remap).astype(int))
+    return llm, int(present.size), int(np.sum(present < K_real)), int(K - present.size)
+
+
 def subsample_rows(llm, n_L, rng):
     if n_L is None or n_L < 0 or n_L >= len(llm):
         return llm
@@ -313,6 +324,7 @@ def run_cell(job):
     llm, K = inject_noise_judges(llm, K_real, m, kind, rng_design, first_prob=scfg.get("position_noise_first_prob", 0.9))
     llm = thin_display_order(llm, rho, rng_design)
     llm = subsample_rows(llm, n_L_req, rng_design)
+    llm, K, K_real, K_dropped = drop_empty_judges(llm, K, K_real)   # a judge without rows has no estimable parameters
     hum_train = panel["human"][panel["human"]["record"].isin(train)].reset_index(drop=True)
     hum_test = panel["human"][panel["human"]["record"].isin(test) & (panel["human"]["y"] != 0.5)].reset_index(drop=True)
     cal = draw_budget(hum_train, n_0, rng_budget)
@@ -330,7 +342,7 @@ def run_cell(job):
     floor = heldout_log_loss(ref, test_recs)
     r_llm = int(min(scfg.get("llm_rank", 1), K - 1, N - 2))          # structural rank of the LLM side
     base = dict(dataset=dataset, sweep=sweep, panel=panel_name, kind=kind, level=float(level), n_0=n_0_actual, n_0_level=int(n_0_req) if n_0_req is not None else -1, seed=int(seed),
-                N=N, K_real=K_real, K=K, r=r_llm, n_L=n_L, n_test=int(len(hum_test)), n_train_human=int(len(hum_train)), rho_swap=rho, m=int(m),
+                N=N, K_real=K_real, K=K, K_dropped=K_dropped, r=r_llm, n_L=n_L, n_test=int(len(hum_test)), n_train_human=int(len(hum_train)), rho_swap=rho, m=int(m),
                 first_share=float(np.mean(llm["a"].to_numpy() == 1)), floor=floor, human_only_exists=bool(btl_mle_exists(N, pairs)))
     out = []
     only = cfg.get("_only_methods")
@@ -356,6 +368,12 @@ def run_cell(job):
             d.update(b_inj_mean_abs=float(np.mean(np.abs(b[K_real:]))), gamma_inj_mean=float(np.mean(g[K_real:])), gamma_inj_mean_abs=float(np.mean(np.abs(g[K_real:]))))
         return d
 
+    def flags(fit):
+        """Convergence and separation diagnostics of a fitted candidate (human-only endpoint: none)."""
+        fi = fit.get("fit_info", {}) or {}
+        return dict(converged=bool(fi.get("converged", True)), b_at_bound=int(fi.get("b_at_bound", 0)), n_at_bound=int(fi.get("n_at_bound", 0)), inner_limit_hits=int(fi.get("inner_limit_hits", 0)),
+                    max_abs_S=float(fi.get("max_abs_S", np.nan)), max_gamma=float(fi.get("max_gamma", np.nan)), polish_grad=float(fi.get("polish_grad_norm", np.nan)))
+
     def lam_fields(lam):
         lam = float(lam)
         return dict(lam=lam, lam_rel=(lam * n_0_actual / n_L) if np.isfinite(lam) else float("inf"))
@@ -380,14 +398,14 @@ def run_cell(job):
         try:
             st_mu = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
             if want("consensus_cal"):
-                rec("consensus_cal", st_mu["s_H"], **lam_fields(np.inf), alpha=float(st_mu["alpha_H"]), converged=bool(st_mu["fit_info"]["converged"]), **inj(st_mu))
+                rec("consensus_cal", st_mu["s_H"], **lam_fields(np.inf), alpha=float(st_mu["alpha_H"]), **flags(st_mu), **inj(st_mu))
         except Exception as e:  # noqa: BLE001
             fail("consensus_cal", e)
     if st_mu is not None and want("dial_mu", "oracle_test"):
         try:
             sel = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_mu, lambda_grid=lam_grid, return_all=True, align="mu")
             lam = float(sel["lam"])
-            rec("dial_mu", sel["s_H"], **lam_fields(lam), n_dropped=len(sel["dropped"]), converged=bool(sel.get("fit_info", {}).get("converged", True)), **(inj(sel) if lam > 0 else {}))
+            rec("dial_mu", sel["s_H"], **lam_fields(lam), n_dropped=len(sel["dropped"]), **flags(sel), **(inj(sel) if lam > 0 else {}))
             if want("oracle_test"):
                 losses = [(l, heldout_log_loss(f["s_H"], test_recs), f) for l, f in sel["candidates"]]
                 lam_o, _, f_o = min(losses, key=lambda x: x[1])
@@ -397,7 +415,7 @@ def run_cell(job):
     if st_mu is not None and want("dial_mle_mu"):
         try:
             jt = fit_dial(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3], init_params=(st_mu["gamma"], st_mu["mu"], st_mu["U"], st_mu["V"], st_mu["b"]), tol=1e-6, max_steps=30, align="mu")
-            rec("dial_mle_mu", jt["s_H"], **lam_fields(jt["lam"]), converged=bool(jt["fit_info"]["converged"]))
+            rec("dial_mle_mu", jt["s_H"], **lam_fields(jt["lam"]), **flags(jt))
         except Exception as e:  # noqa: BLE001
             fail("dial_mle_mu", e)
 
@@ -406,7 +424,7 @@ def run_cell(job):
         try:
             st0 = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs)
             sel0 = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], staged_fit=st0, lambda_grid=lam_grid, align="mu")
-            rec("dial_nodeb", sel0["s_H"], **lam_fields(sel0["lam"]), n_dropped=len(sel0["dropped"]), converged=bool(sel0.get("fit_info", {}).get("converged", True)))
+            rec("dial_nodeb", sel0["s_H"], **lam_fields(sel0["lam"]), n_dropped=len(sel0["dropped"]), **flags(sel0))
         except Exception as e:  # noqa: BLE001
             fail("dial_nodeb", e)
 
@@ -415,13 +433,13 @@ def run_cell(job):
         try:
             st_w = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
             if want("staged_w"):
-                rec("staged_w", st_w["s_H"], **lam_fields(np.inf), converged=bool(st_w["fit_info"]["converged"]))
+                rec("staged_w", st_w["s_H"], **lam_fields(np.inf), **flags(st_w))
             if want("dial_w"):
                 selw = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_w, lambda_grid=lam_grid, align="W")
-                rec("dial_w", selw["s_H"], **lam_fields(selw["lam"]), n_dropped=len(selw["dropped"]), converged=bool(selw.get("fit_info", {}).get("converged", True)))
+                rec("dial_w", selw["s_H"], **lam_fields(selw["lam"]), n_dropped=len(selw["dropped"]), **flags(selw))
             if want("dial_mle_w"):
                 jtw = fit_dial(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3], init_params=(st_w["gamma"], st_w["mu"], st_w["U"], st_w["V"], st_w["b"]), tol=1e-6, max_steps=30, align="W")
-                rec("dial_mle_w", jtw["s_H"], **lam_fields(jtw["lam"]), converged=bool(jtw["fit_info"]["converged"]))
+                rec("dial_mle_w", jtw["s_H"], **lam_fields(jtw["lam"]), **flags(jtw))
         except Exception as e:  # noqa: BLE001
             fail("dial_w", e)
 
@@ -429,7 +447,7 @@ def run_cell(job):
     if want("dial_rsel"):
         try:
             r_sel, selr, table = _gacv_rank_select(N, K, pairs, A, True, lam_grid, r_max, {})
-            rec("dial_rsel", selr["s_H"], r_sel=r_sel, **lam_fields(selr["lam"]), n_dropped=len(selr["dropped"]), converged=bool(selr.get("fit_info", {}).get("converged", True)), rank_table=table)
+            rec("dial_rsel", selr["s_H"], r_sel=r_sel, **lam_fields(selr["lam"]), n_dropped=len(selr["dropped"]), **flags(selr), rank_table=table)
         except Exception as e:  # noqa: BLE001
             fail("dial_rsel", e)
 

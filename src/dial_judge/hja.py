@@ -122,6 +122,71 @@ def negative_log_likelihood_and_grad(mu, gamma, U, V, n_ijk, y_ijk, b=None, n_or
     return loss_value, grad_mu, grad_gamma, grad_U, grad_V, grad_b
 
 
+# Finite-fit bound on the judge position effects. A centered log-odds of 10 is a
+# first-position probability of 0.99995, beyond what any judge's sample supports; a judge
+# whose order term is separated (every retained verdict explained by display position) has
+# no finite MLE for b_k, and the bound makes the maximizer exist so that the remaining
+# parameters, in particular the consensus, are estimated at the limiting profile likelihood.
+# Judges at the bound are reported as `b_at_bound` in fit_info.
+POSITION_EFFECT_BOUND = 10.0
+# The same box is applied to every coordinate of the centering-reduced chart (gamma, U, mu, V and,
+# in the joint fit, alpha and a): when a judge's verdicts never contradict its fitted scores its
+# loading (gamma_k, U_k) has no finite maximizer either, and without a box the divergence stalls
+# the optimizer and, along a warm-started lambda path, disqualifies every candidate. The box is
+# inert on regular fits (all coordinates of the anchored chart are O(1) to O(5) there) and makes
+# the maximizer exist otherwise; coordinates on the boundary are reported as `n_at_bound`.
+CHART_BOUND = 10.0
+_BOUND_TOL = 1e-6
+
+
+def chart_bounds(n, bound=CHART_BOUND):
+    """L-BFGS-B box [-bound, bound] for all n chart coordinates."""
+    return [(-bound, bound)] * n
+
+
+def position_bounds(n_before, K, n_after, bound=POSITION_EFFECT_BOUND):
+    """Kept for callers that bound only the K position effects."""
+    return [(None, None)] * n_before + [(-bound, bound)] * K + [(None, None)] * n_after
+
+
+def projected_gradient(x, grad, bounds):
+    """Zero the gradient components that point outward at an active bound."""
+    g = np.array(grad, dtype=float, copy=True)
+    if bounds is None:
+        return g
+    for idx, (lo, hi) in enumerate(bounds):
+        if lo is not None and x[idx] <= lo + _BOUND_TOL and g[idx] > 0:
+            g[idx] = 0.0
+        if hi is not None and x[idx] >= hi - _BOUND_TOL and g[idx] < 0:
+            g[idx] = 0.0
+    return g
+
+
+def count_at_bound(b, bound=POSITION_EFFECT_BOUND):
+    b = np.asarray(b, dtype=float)
+    return int(np.sum(np.abs(b) >= bound - _BOUND_TOL)) if b.size else 0
+
+
+def count_chart_at_bound(x, bounds):
+    """Number of coordinates of x on the boundary of `bounds`."""
+    if bounds is None:
+        return 0
+    x = np.asarray(x, dtype=float)
+    lo = np.array([-np.inf if b[0] is None else b[0] for b in bounds]); hi = np.array([np.inf if b[1] is None else b[1] for b in bounds])
+    return int(np.sum((x <= lo + _BOUND_TOL) | (x >= hi - _BOUND_TOL)))
+
+
+def accept_block_step(result, f0, label):
+    """A proximal block update need not be solved exactly: accept L-BFGS-B's iterate whenever it
+    did not increase the objective (its line search guarantees descent), and report whether the
+    inner iteration limit was hit. Raise only when the solver returned a worse point."""
+    if result.success:
+        return False
+    if float(result.fun) <= f0 + 1e-12 * (1.0 + abs(f0)):
+        return True
+    raise RuntimeError(f"{label} failed: {result.message} (nit={getattr(result, 'nit', 'NA')})")
+
+
 def aggregate_judge_pairs(n_ijk, y_ijk, judge_index=None):
     K, N, _ = n_ijk.shape
     pairs = []
@@ -249,8 +314,8 @@ def initialize_position_effects(mu, gamma, U, V, n_order, y_order):
             grad = np.array([float(np.sum(a_rep[mask] * (n_obs * expit(eta) - y_obs)))])
             return loss, grad
 
-        result = minimize(objective, x0=np.zeros(1), method="L-BFGS-B", jac=True, options={"maxiter": 200, "gtol": 1e-6})
-        b0[k] = float(result.x[0])
+        result = minimize(objective, x0=np.zeros(1), method="L-BFGS-B", jac=True, bounds=[(-POSITION_EFFECT_BOUND, POSITION_EFFECT_BOUND)], options={"maxiter": 200, "gtol": 1e-6})
+        b0[k] = float(np.clip(result.x[0], -POSITION_EFFECT_BOUND, POSITION_EFFECT_BOUND))
     return b0
 
 
@@ -340,7 +405,7 @@ def reduce_item_block(mu, V):
     return mu_reduced, V_reduced
 
 
-def polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=None, y_order=None, maxiter=400, gtol=1e-8):
+def polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=None, y_order=None, maxiter=2000, gtol=1e-8):
     """
     Finish an LLM-only fit by L-BFGS over the centering-reduced factor chart
     (gamma_red, U_red, [b], mu_red, V_red), then ReAnchor. The chart has exact
@@ -387,12 +452,19 @@ def polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=None, y_order=None,
     z0 = np.concatenate(parts)
     # scale-free stopping: gradient relative to total comparisons
     n_total = float(np.sum(n_order) if use_order else np.sum(n_ijk))
-    res = minimize(fg, z0, jac=True, method="L-BFGS-B", options={"maxiter": maxiter, "gtol": gtol * n_total, "ftol": 1e-15})
+    bounds = chart_bounds(z0.size)
+    res = minimize(fg, z0, jac=True, method="L-BFGS-B", bounds=bounds, options={"maxiter": maxiter, "gtol": gtol * n_total, "ftol": 1e-15})
     g, m, Uu, Vv, bb = unpack(res.x)
     if r > 0:
         g, m, Uu, Vv = reanchor(g, m, Uu, Vv)
-    grad_norm = float(np.linalg.norm(res.jac)) / n_total
-    info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "nll": float(res.fun)}
+    grad_norm = float(np.linalg.norm(projected_gradient(res.x, res.jac, bounds))) / n_total
+    # Divergence diagnostics: a judge whose verdicts never contradict its fitted scores has no finite
+    # loading (gamma_k, U_k), and the polish then stops at the iteration cap with a small but
+    # nonzero gradient; `max_abs_S` and `max_gamma` let the caller report such fits.
+    S = np.outer(g, m) + Uu @ Vv.T
+    info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "nll": float(res.fun),
+            "b_at_bound": count_at_bound(bb) if use_order else 0, "n_at_bound": count_chart_at_bound(res.x, bounds),
+            "max_abs_S": float(np.max(np.abs(S))), "max_gamma": float(np.max(np.abs(g)))}
     return g, m, Uu, Vv, (bb if use_order else np.zeros(K)), info
 
 
@@ -416,6 +488,7 @@ def alternating_mle(
     gamma, mu, U, V, b = initialize_parameters(N, K, r, n_ijk, y_ijk, n_order=n_order, y_order=y_order)
     history = []
     converged = False
+    inner_limit_hits = 0
 
     judge_basis = make_centering_basis(K)
     item_basis = make_centering_basis(N)
@@ -456,10 +529,10 @@ def alternating_mle(
             x0=current_judge_block,
             method="L-BFGS-B",
             jac=True,
+            bounds=chart_bounds(current_judge_block.size),
             options={"maxiter": inner_maxiter, "gtol": 1e-5, "maxls": 50},
         )
-        if not result_j.success:
-            raise RuntimeError(f"judge-side update failed: {result_j.message} (nit={getattr(result_j, 'nit', 'NA')})")
+        inner_limit_hits += accept_block_step(result_j, objective_judge(current_judge_block)[0], "judge-side update")
         gamma_tilde = np.ones(K, dtype=float) + judge_basis @ result_j.x[:n_gamma]
         U_tilde = judge_basis @ result_j.x[n_gamma: n_gamma + n_U].reshape(K - 1, r)
         b_tilde = result_j.x[n_gamma + n_U:].copy() if use_order else np.zeros(K, dtype=float)
@@ -481,10 +554,10 @@ def alternating_mle(
             x0=current_item_block,
             method="L-BFGS-B",
             jac=True,
+            bounds=chart_bounds(current_item_block.size),
             options={"maxiter": inner_maxiter, "gtol": 1e-5, "maxls": 50},
         )
-        if not result_i.success:
-            raise RuntimeError(f"item-side update failed: {result_i.message} (nit={getattr(result_i, 'nit', 'NA')})")
+        inner_limit_hits += accept_block_step(result_i, objective_item(current_item_block)[0], "item-side update")
         mu_tilde = item_basis @ result_i.x[: N - 1]
         V_tilde = item_basis @ result_i.x[N - 1:].reshape(N - 1, r)
 
@@ -512,6 +585,8 @@ def alternating_mle(
         "history": history,
         "nll": float(history[-1]["nll"]) if history else None,
         "reanchor_steps": bool(reanchor_steps),
+        "inner_limit_hits": int(inner_limit_hits),
+        "b_at_bound": count_at_bound(b) if use_order else 0,
     }
     if polish:
         gamma, mu, U, V, b, pinfo = polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=n_order, y_order=y_order)
@@ -556,14 +631,19 @@ def fit_rank0_model(N, K, n_ijk, y_ijk, maxiter=2000, n_order=None, y_order=None
             grad_parts.append(grad_b)
         return loss, np.concatenate(grad_parts)
 
+    bounds = chart_bounds(x0.size)
     result = minimize(
         objective,
         x0=x0,
         method="L-BFGS-B",
         jac=True,
+        bounds=bounds,
         options={"maxiter": maxiter, "gtol": 1e-5, "maxls": 50},
     )
-    if not result.success:
+    n_total = float(np.sum(n_order) if use_order else np.sum(n_ijk))
+    grad_norm = float(np.linalg.norm(projected_gradient(result.x, result.jac, bounds))) / max(n_total, 1.0)
+    converged = bool(result.success) or grad_norm <= 1e-5
+    if not converged and float(result.fun) > objective(x0)[0]:
         raise RuntimeError(f"rank-0 fit failed: {result.message}")
 
     mu = item_basis @ result.x[:n_mu]
@@ -572,7 +652,8 @@ def fit_rank0_model(N, K, n_ijk, y_ijk, maxiter=2000, n_order=None, y_order=None
     U = np.zeros((K, 0), dtype=float)
     V = np.zeros((N, 0), dtype=float)
     gamma, mu, U, V = reanchor(gamma, mu, U, V)
-    fit_info = {"n_iter": int(result.nit), "converged": bool(result.success), "nll": float(result.fun), "b": b}
+    fit_info = {"n_iter": int(result.nit), "converged": converged, "polish_grad_norm": grad_norm, "nll": float(result.fun), "b": b,
+                "b_at_bound": count_at_bound(b) if use_order else 0, "n_at_bound": count_chart_at_bound(result.x, bounds), "inner_limit_hits": int(not result.success)}
     return mu, gamma, U, V, b, fit_info
 
 

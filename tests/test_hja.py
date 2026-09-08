@@ -96,3 +96,28 @@ def test_hja_order_fit_smoke(small_study):
     assert fit["fit_info"]["converged"]
     assert fit["S"].shape == (small_study["K"], small_study["N"])
     assert np.all(np.isfinite(fit["b"]))
+
+
+def test_separated_position_effect_hits_bound_and_converges():
+    """A judge that always picks the first-displayed response has no finite MLE for b_k; the
+    bounded fit converges with that judge at the bound and finite scores for everything else."""
+    from dial_judge.hja import POSITION_EFFECT_BOUND
+    rng = np.random.default_rng(0)
+    N, K, r = 6, 4, 1
+    s = np.linspace(-1, 1, N)
+    n_order = np.zeros((K, N, N, 2)); y_order = np.zeros((K, N, N, 2))
+    for k in range(K):
+        for i in range(N):
+            for j in range(i + 1, N):
+                for a_idx, a in enumerate((-1.0, 1.0)):
+                    n = 6
+                    if k == K - 1:
+                        y = n if a > 0 else 0          # position-only judge: first-displayed always wins
+                    else:
+                        y = rng.binomial(n, 1 / (1 + np.exp(-(s[i] - s[j] + 0.3 * a))))
+                    n_order[k, i, j, a_idx] = n; y_order[k, i, j, a_idx] = y
+    fit = fit_hja(N, K, r, n_order=n_order, y_order=y_order, max_steps=60, tol=1e-5, inner_maxiter=200)
+    assert fit["fit_info"]["converged"]
+    assert fit["fit_info"]["b_at_bound"] == 1
+    assert abs(fit["b"][K - 1]) >= POSITION_EFFECT_BOUND - 1e-6 and np.all(np.abs(fit["b"][:-1]) < 2.0)
+    assert np.all(np.isfinite(fit["mu"])) and np.max(np.abs(fit["mu"])) < 5.0

@@ -55,6 +55,9 @@ python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 
   prediction from a pilot via the test statistic). Methods: the shared panel above, LLM rank
   `llm_rank = 1`, plus the diagnostics; `--methods a,b` recomputes only the listed
   methods for cells that lack them.
+  `real_data/inspect_cell.py` rebuilds one cell's data exactly as `run_cell` does and prints
+  the staged fit's convergence/separation diagnostics and DIAL's GACV path
+  (`python -m experiments.real_data.inspect_cell mt_bench noise_scarce biased5 anti 0 --seed 1`).
   `real_data/ja_reanalysis.py` rescored HJA's JA-Ranking judge files against our
   human labels (`--ja`). Rows append to `results/real_robustness/<dataset>/rows.jsonl`,
   `robustness_plot.py` aggregates, and `notebooks/real_data_robustness.ipynb`

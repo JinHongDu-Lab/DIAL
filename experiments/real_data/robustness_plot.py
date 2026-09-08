@@ -22,7 +22,7 @@ MAIN_METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial", 
 def load(dataset, base="."):
     path = Path(base) / "results" / "real_robustness" / dataset / "rows.jsonl"
     df = pd.DataFrame([json.loads(l) for l in open(path)])
-    for c in METRICS + ["error", "converged", "lam", "human_only_exists", "n_0_level"]:
+    for c in METRICS + ["error", "converged", "lam", "human_only_exists", "n_0_level", "n_at_bound", "b_at_bound", "K_dropped"]:
         if c not in df:
             df[c] = np.nan
     df["n_0_level"] = df["n_0_level"].fillna(-1).astype(int)
@@ -51,6 +51,9 @@ def aggregate(df):
                 lam_inf_frac=("lam", lambda x: float(np.mean(np.isinf(x.astype(float))))),
                 lam_zero_frac=("lam", lambda x: float(np.mean(x.astype(float) == 0))),
                 nonconv_frac=("converged", lambda x: float(np.mean(~x.fillna(True).astype(bool)))),
+                sep_frac=("n_at_bound", lambda x: float(np.mean(x.fillna(0).astype(float) > 0))),      # fit touched the finite-fit box (a separated judge)
+                bsep_frac=("b_at_bound", lambda x: float(np.mean(x.fillna(0).astype(float) > 0))),    # a position effect at the bound
+                k_dropped_mean=("K_dropped", lambda x: float(np.nanmean(x.astype(float))) if x.notna().any() else 0.0),
                 ho_exists_frac=("human_only_exists", lambda x: float(np.mean(x.fillna(True).astype(bool))))).reset_index()
     ho = ok[ok.method == "human_only"][KEY + ["seed", "excess"]].rename(columns={"excess": "ex_ho"})
     paired = ok.merge(ho, on=KEY + ["seed"], how="inner")
