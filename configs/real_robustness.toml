@@ -9,7 +9,7 @@ tie_rate_exclude = 0.5
 min_coverage = 0.5
 llm_ties = "drop"
 human_ties = "drop"
-# GACV candidate weights as multiples of n_L / n_0 (plus the endpoints 0 and infinity).
+# GACV candidate weights as multiples of n_L / n_H (plus the endpoints 0 and infinity).
 lambda_multipliers = [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
 # Structural rank of the LLM side for Consensus-cal, DIAL, DIAL-noDeb, and the W diagnostics (capped at min(K-1, N-2)).
 llm_rank = 1
@@ -20,13 +20,13 @@ position_noise_first_prob = 0.9
 # Test fraction and default fixed human budget per dataset.
 [arena_33k]
 f_test = 0.3
-n_0 = 300
+n_H = 300
 [mt_bench]
 f_test = 0.5
-n_0 = 80
+n_H = 80
 [pandalm]
 f_test = 0.5
-n_0 = 60
+n_H = 60
 
 # Judge panels by name; "all" is every kept judge.
 [panels]
@@ -47,7 +47,7 @@ levels = [0, 1, 2, 4, 8]
 rho_swap = 0.05
 
 # B1': injected judges when LLM judgments are scarce: the five-judge panel is subsampled to n_L balanced rows
-# first, then m synthetic judges are added answering the retained records; n_0 fixed by n_0_fixed.
+# first, then m synthetic judges are added answering the retained records; n_H fixed by n_H_fixed.
 [sweeps.noise_scarce]
 datasets = ["arena_33k", "mt_bench", "pandalm"]
 panels = ["biased5"]
@@ -56,9 +56,9 @@ levels = [0, 1, 2, 4, 8]
 rho_swap = 1.0
 # scarce base: about ten LLM judgments per pair on each benchmark (190 / 15 / 10 pairs)
 n_L_base = { arena_33k = 2000, mt_bench = 160, pandalm = 100 }
-n_0_fixed = { arena_33k = 1000, mt_bench = 80, pandalm = 60 }
+n_H_fixed = { arena_33k = 1000, mt_bench = 80, pandalm = 60 }
 
-# C1: human budget with the as-collected balanced LLM data; level = n_0 (-1 = all train labels).
+# C1: human budget with the as-collected balanced LLM data; level = n_H (-1 = all train labels).
 [sweeps.budget]
 datasets = ["arena_33k", "mt_bench", "pandalm"]
 panels = ["all"]
@@ -75,19 +75,23 @@ panels = ["all", "biased5"]
 rho_swap = 1.0
 # levels scaled by the number of pairs so that each benchmark spans about 3 to 100 judgments per pair
 levels = { arena_33k = [500, 1000, 2000, 5000, 20000], mt_bench = [40, 80, 160, 400, 1600], pandalm = [25, 50, 100, 250, 1000] }
-n_0_grid = { arena_33k = [300, 1000], mt_bench = [80], pandalm = [60] }
+n_H_grid = { arena_33k = [300, 1000], mt_bench = [80], pandalm = [60] }
 
-# B2: specification test of s_0 = alpha mu on Arena human subsets; level = n_0.
+# B2: specification test of s_0 = alpha mu on Arena human subsets; level = n_H.
 [sweeps.spectest]
 settings = ["english_global", "nonenglish_global", "nonenglish_subset"]
-# n_0 must let the unrestricted BTL on 20 items exist; levels above the subset's train pool collapse to "all".
+# n_H must let the unrestricted BTL on 20 items exist; levels above the subset's train pool collapse to "all".
 levels = [100, 200, 400, 800, 1600]
 f_test = 0.3
 
 # Planner: estimate the anchor misspecification from a pilot human sample and predict the budget curves.
+# Levels are aligned 1:1 with sweeps.budget.levels (same seed, same draw_budget draw per level:
+# robustness.run_planner and run_cell's budget branch both key off [seed, code, 1] for the split
+# and [seed, code, 2] for the draw), so the stopping-time backtest of item 3 can walk this exact
+# ladder and look up the matching budget-sweep row for its realized loss.
 [sweeps.planner]
 datasets = ["arena_33k", "mt_bench", "pandalm"]
 [sweeps.planner.levels]
-arena_33k = [100, 200, 400]
-mt_bench = [40, 80, 160]
-pandalm = [40, 80, 160]
+arena_33k = [50, 100, 200, 400, 800, 1600, -1]
+mt_bench = [20, 40, 80, 160, 320, -1]
+pandalm = [20, 40, 80, 160, 320, -1]

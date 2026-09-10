@@ -1,25 +1,36 @@
-"""Shared method panel for every figure of the simulation and real-data studies.
+r"""Shared method panel for every figure of the simulation and real-data studies.
 
 Five presented methods, in this order, with one name, colour, marker, and line
-style each; the appendix-only diagnostics follow. Both notebooks import from
-here so the studies stay consistent (plan: code/plan/2026-09-07-unified-method-panel-plan.md).
+style each; the appendix-only diagnostics follow. Figures that draw both
+alignments use `PRESENTED_W`, which inserts DIAL-$W$ after DIAL-$\mu$. Both
+notebooks import the panel and `RCPARAMS` from here, so the two studies share
+their method order, colours, and fonts (plan:
+code/plan/2026-09-07-unified-method-panel-plan.md).
 """
 
+import matplotlib as mpl
+import seaborn as sns
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+
 PRESENTED = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb"]
-APPENDIX = ["dial_w", "staged_w", "dial_mle_mu", "dial_mle_w", "oracle", "dial_rsel"]
+# Order used by every figure that draws both alignments: DIAL-$W$ sits next to DIAL-$\mu$,
+# before DIAL-noPos, so the simulation and real-data legends read alike.
+PRESENTED_W = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_w", "dial_nodeb"]
+APPENDIX = ["staged_w", "dial_mle_mu", "dial_mle_w", "oracle", "dial_rsel"]
 
 LABEL = {
-    "human_only": "Human-only",
-    "pooled_cal": "Pooled-LLM",
-    "consensus_cal": "Consensus-cal",
-    "dial_mu": "DIAL",
-    "dial_nodeb": "DIAL-noDeb",
-    "dial_w": "DIAL-W",
-    "staged_w": "Consensus-cal-W ($\\lambda=\\infty$, $W$)",
-    "dial_mle_mu": "DIAL, fixed weight $n_L/n_0$",
-    "dial_mle_w": "DIAL-W, fixed weight $n_L/n_0$",
+    "human_only": "Human",
+    "pooled_cal": "Pooled",
+    "consensus_cal": "Cons-Cal",
+    "dial_mu": "DIAL-$\\mu$",
+    "dial_nodeb": "DIAL-noPos",
+    "dial_w": "DIAL-$W$",
+    "staged_w": "Cons-Cal-$W$ ($\\lambda=\\infty$, $W$)",
+    "dial_mle_mu": "DIAL-$\\mu$, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
+    "dial_mle_w": "DIAL-$W$, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "oracle": "oracle weight",
-    "dial_rsel": "DIAL, rank by GACV",
+    "dial_rsel": "DIAL-$\\mu$, rank by GACV",
 }
 
 STYLE = {
@@ -58,7 +69,119 @@ def plot_kwargs(method, with_marker=True):
 
 # Aliases for the oracle variants stored by the two drivers (population-risk oracle on DIAL's and
 # DIAL-W's paths in the simulation; test-loss oracle on real data).
-for _k, _lab in (("oracle_mu", "oracle weight (DIAL path)"), ("oracle_w", "oracle weight (DIAL-W path)"), ("oracle_test", "test-oracle weight")):
+for _k, _lab in (("oracle_mu", "oracle weight (DIAL-$\\mu$ path)"), ("oracle_w", "oracle weight (DIAL-$W$ path)"), ("oracle_test", "test-oracle weight")):
     LABEL[_k] = _lab
     STYLE[_k] = dict(STYLE["oracle"])
 STYLE["oracle_w"]["color"] = "#2a78d6"
+
+
+# --------------------------------------------------------------------------- drawing helpers
+# One seaborn call per panel replaces the per-method loops the notebooks used to repeat: the
+# per-method colour, dash pattern, and marker of `STYLE` are handed to seaborn as hue/style
+# mappings (line widths are set afterwards), so a panel is `method_lines(ax, frame, x, y, methods)`
+# and a grouped-bar panel is `method_bars(ax, frame, x, y, methods)`.
+
+_DASH_RC = {"--": "lines.dashed_pattern", "-.": "lines.dashdot_pattern", ":": "lines.dotted_pattern"}
+
+
+def _dash(ls, lw):
+    """Matplotlib's own dash pattern for `ls` at width `lw` (seaborn wants explicit tuples)."""
+    if ls in ("-", "solid", None):
+        return ""
+    return tuple(lw * v for v in mpl.rcParams[_DASH_RC[ls]])
+
+
+def palette(methods):
+    return {m: STYLE[m]["color"] for m in methods}
+
+
+def dashes(methods, lw=None):
+    return {m: _dash(STYLE[m]["ls"], STYLE[m]["lw"] if lw is None else lw) for m in methods}
+
+
+def markers(methods):
+    # seaborn refuses to mix filled and unfilled markers, so the marker-less methods get a
+    # filled placeholder and `method_lines` shrinks it away.
+    return {m: STYLE[m].get("marker") or "o" for m in methods}
+
+
+def widths(methods, lw=None):
+    return {m: STYLE[m]["lw"] if lw is None else lw for m in methods}
+
+
+def method_lines(ax, data, x, y, methods, se=None, band=False, caps=False, ms=3.2, lw=None,
+                 se_exclude=(), emphasize=(), cap_kw=None, **kw):
+    """Draw one line per method with the shared panel style (single `sns.lineplot` call).
+
+    `se` names the standard-error column; `band` shades +/- 1.96 se, `caps` draws capped error
+    bars instead, skipping the methods in `se_exclude`. `lw` overrides the per-method widths of
+    `STYLE` with one width; `emphasize` lifts those methods above the rest. Methods absent from
+    `data` are dropped so the others keep their colours.
+    """
+    methods = [m for m in methods if (data["method"] == m).any()]
+    if not methods:
+        return methods
+    d = data[data["method"].isin(methods)].sort_values(x)
+    keep = ax.get_xlabel(), ax.get_ylabel()   # seaborn names the axes after the data columns; the callers set their own
+    sns.lineplot(data=d, x=x, y=y, hue="method", style="method",
+                 hue_order=methods, style_order=methods,
+                 palette=palette(methods), dashes=dashes(methods, lw), markers=markers(methods),
+                 markersize=ms, estimator=None, errorbar=None, legend=False, ax=ax,
+                 **{"markeredgewidth": 1.0, **kw})
+    ax.set_xlabel(keep[0]); ax.set_ylabel(keep[1])
+    # after the fact: per-method line widths (seaborn's `size` semantic would rescale the markers)
+    # and matplotlib's marker edge (seaborn outlines every marker in white, which eats a small marker)
+    for m, line in zip(methods, ax.lines[-len(methods):]):
+        line.set_linewidth(widths([m], lw)[m]); line.set_markeredgecolor(line.get_color())
+        line.set_zorder(3 if m in emphasize else 2)
+        if STYLE[m].get("marker") is None:
+            line.set_markersize(0)
+    if se is not None and (band or caps):
+        for m, g in d[~d["method"].isin(se_exclude)].groupby("method", sort=False):
+            if band:
+                ax.fill_between(g[x], g[y] - 1.96 * g[se], g[y] + 1.96 * g[se], color=STYLE[m]["color"], alpha=0.10, lw=0)
+            else:
+                ax.errorbar(g[x], g[y], yerr=1.96 * g[se], fmt="none", ecolor=STYLE[m]["color"], zorder=2,
+                            **{"elinewidth": 0.5, "capsize": 1.0, "capthick": 0.5, **(cap_kw or {})})
+    return methods
+
+
+def method_bars(ax, data, x, y, methods, se=None, hatch=None, order=None, gap=0.1, width=0.8, ecolor=INK):
+    """Grouped bars, one group per level of `x` and one bar per method (single `sns.barplot`).
+
+    `se` names the standard-error column (1.96 se error bars) and `hatch` a boolean column that
+    hatches a bar. Seaborn does the dodging; `gap` reopens the small spacing between bars.
+    """
+    order = list(order) if order is not None else list(dict.fromkeys(data[x]))
+    methods = [m for m in methods if (data["method"] == m).any()]
+    keep = ax.get_xlabel(), ax.get_ylabel()
+    sns.barplot(data=data, x=x, y=y, hue="method", order=order, hue_order=methods,
+                palette=palette(methods), width=width, errorbar=None, legend=False, zorder=2, ax=ax)
+    ax.set_xlabel(keep[0]); ax.set_ylabel(keep[1])
+    idx = data.set_index([x, "method"])
+    bars = list(ax.containers)[-len(methods):]   # snapshot: the error bars below append containers too
+    for m, cont in zip(methods, bars):
+        for lab, bar in zip(order, cont):
+            bar.set_width(bar.get_width() * (1 - gap)); bar.set_x(bar.get_x() + bar.get_width() * gap / 2)
+            if (lab, m) not in idx.index:
+                continue
+            row = idx.loc[(lab, m)]
+            if se is not None:
+                ax.errorbar(bar.get_x() + bar.get_width() / 2, bar.get_height(), yerr=1.96 * float(row[se]),
+                            fmt="none", lw=0.6, capsize=1.5, ecolor=ecolor, zorder=3)
+            if hatch is not None and bool(row[hatch]):
+                bar.set_hatch("////"); bar.set_edgecolor("white"); bar.set_linewidth(0)
+    return methods
+
+
+def legend_handles(methods, labels=None, extra=(), extra_first=False, ms=3.2, lw=None, as_patch=(), no_marker=()):
+    """(handles, labels) for a figure legend in the shared method order; `as_patch` lists the
+    methods drawn as bars, `no_marker` those drawn as a flat reference line, and `extra` holds
+    (label, kwargs) pairs for non-method line entries such as the theory lines."""
+    labels = LABEL if labels is None else labels
+    h = [Patch(facecolor=STYLE[m]["color"], label=labels[m]) if m in as_patch else
+         Line2D([], [], color=STYLE[m]["color"], ls=STYLE[m]["ls"], lw=STYLE[m]["lw"] if lw is None else lw,
+                marker=None if m in no_marker else STYLE[m].get("marker"), ms=ms, label=labels[m]) for m in methods]
+    ex = [Line2D([], [], label=lab, **kw) for lab, kw in extra]
+    h = ex + h if extra_first else h + ex
+    return h, [a.get_label() for a in h]

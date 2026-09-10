@@ -12,15 +12,18 @@ colours, for every figure of the simulation and the real-data study
 
 | Key | Presented name | Definition |
 |---|---|---|
-| `human_only` | Human-only | centred BTL on the human sample (lambda = 0) |
-| `pooled_cal` | Pooled-LLM | one BTL over all LLM judgments (no judge identity, no order term) plus a human-fitted scale |
-| `consensus_cal` | Consensus-cal | order-effect structured model at rank r on LLM data, consensus mu, one human-fitted scale (lambda = infinity endpoint of DIAL) |
-| `dial_mu` | DIAL | joint weighted likelihood at rank r, human score aligned to mu only (`align="mu"`), GACV weight |
-| `dial_nodeb` | DIAL-noDeb | DIAL without the order term |
+| `human_only` | Human | centred BTL on the human sample (lambda = 0) |
+| `pooled_cal` | Pooled | one BTL over all LLM judgments (no judge identity, no order term) plus a human-fitted scale |
+| `consensus_cal` | Cons-Cal | order-effect structured model at rank r on LLM data, consensus mu, one human-fitted scale (lambda = infinity endpoint of DIAL) |
+| `dial_mu` | DIAL-$\mu$ | joint weighted likelihood at rank r, human score aligned to mu only (`align="mu"`), GACV weight |
+| `dial_w` | DIAL-$W$ | same fit calibrating within W = [mu, V] (`align="W"`), GACV weight; drawn in the simulation figures, appendix diagnostic on real data |
+| `dial_nodeb` | DIAL-noPos | DIAL-$\mu$ without the order term |
 
-Diagnostics (appendix only): `staged_w`, `dial_w`, `dial_mle_w` (calibration within
-W = [mu, V]), `dial_mle_mu` (fixed weight n_L / n_0), `oracle_mu` / `oracle_test`
-(population-risk or test-loss minimizer on DIAL's path), `dial_rsel` ((r, lambda) by GACV).
+Diagnostics (appendix only): `staged_w`, `dial_mle_w` (calibration within W = [mu, V]),
+`dial_mle_mu` (fixed weight n_L / n_H), `oracle_mu` / `oracle_test` (population-risk or
+test-loss minimizer on DIAL-$\mu$'s path), `dial_rsel` ((r, lambda) by GACV).
+`dial_w` stays in `style.APPENDIX` but the simulation notebook passes it to `draw(..., extra=["dial_w"])`
+for all three r1 figures; the real-data figures keep the five presented methods.
 The alignment is an option of `dial_model.joint`, `gacv.select_lambda`, and
 `benchmarks.fit_dial` (`align="W"` remains the library default).
 
@@ -29,11 +32,14 @@ The alignment is an option of `dial_model.joint`, `gacv.select_lambda`, and
 LLM side S = gamma mu^T + U V^T at rank r with judge-specific position effects and an
 unbalanced display (canonical item first with probability 0.75); human target
 s_0 = alpha_0 mu (configs `main10`, `app20`, aligned with the consensus as on the three
-benchmarks) or s_0 = W c_0 with c_V ~ N(0, 0.5^2) (`main10_mis`, appendix, where DIAL-W
-is needed). Rows: n_0 at fixed n_L (theory lines (N-1)/(2 n_0) and 1/(2 n_0)); n_L at
-fixed n_0 with pair-level LLM overdispersion. Metrics: excess human risk, Kendall tau
+benchmarks) or s_0 = W c_0 with c_V ~ N(0, 0.5^2) (`main10_mis`, appendix, where DIAL-$W$
+is needed). Rows: n_H at fixed n_L (theory lines (N-1)/(2 n_H), 1/(2 n_H), and
+(r+1)/(2 n_H) for the W-calibration); n_L at
+fixed n_H with pair-level LLM overdispersion. Metrics: excess human risk, Kendall tau
 (= 2 x pairwise sign accuracy - 1), 95% contrast coverage (cell-clustered sandwich), RMSE
-of b-hat; Spearman and MSE(S) in the appendix tables.
+of b-hat; Spearman and MSE(S) in the appendix tables. Pooled and DIAL-noPos have no order
+parameter, so they report the RMSE of their implied b-hat = 0 (`b_is_zero` flag; b_sign_acc
+omitted, being undefined for a zero estimate) and stay visible in that panel.
 
 ```bash
 python experiments/simulation/r1_main.py --config main10 --row both --seeds 0:50 --workers 6

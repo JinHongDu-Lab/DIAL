@@ -3,7 +3,7 @@ GACV selection of the DIAL LLM weight lambda (paper Section 5.3, Eq. 18).
 
 For a finite candidate set Lambda subset (0, inf),
 
-    GACV(lambda) = ell_H^full(s_hat_lambda) + 1/(n_0 - 1) tr(H_hat^{-1} J_hat)
+    GACV(lambda) = ell_H^full(s_hat_lambda) + 1/(n_H - 1) tr(H_hat^{-1} J_hat)
 
 approximates leave-one-human-comparison-out predictive loss while keeping all
 LLM comparisons in every candidate fit (Theorem 5). Coordinates are the
@@ -30,8 +30,8 @@ from .hja import (
 )
 
 
-def default_lambda_grid(n_L, n_0, n_points=7):
-    mle = default_lambda(n_L, n_0)
+def default_lambda_grid(n_L, n_H, n_points=7):
+    mle = default_lambda(n_L, n_H)
     multipliers = np.geomspace(0.1, 10.0, n_points)
     grid = sorted({float(m * mle) for m in multipliers} | {float(mle)})
     return grid
@@ -125,7 +125,7 @@ def q_lambda_grad(
     y_order,
     pair_arrays,
     lam,
-    n_0,
+    n_H,
     n_L,
 ):
     gamma, mu, U, V, b, alpha, a = unpack_reduced(zeta, N, K, r, judge_basis, item_basis, use_order)
@@ -136,16 +136,16 @@ def q_lambda_grad(
     l_h, galpha, ga, gmu_h, gV_h_cal = human_nll_and_grad(alpha, a, mu, V[:, :a.size], pair_arrays)
     gV_h = np.zeros_like(V)
     gV_h[:, :a.size] = gV_h_cal
-    q = (l_h / n_0) + lam * (l_l / n_L)
+    q = (l_h / n_H) + lam * (l_l / n_L)
     scale_l = lam / n_L
     g_gamma_red = judge_basis.T @ (scale_l * ggamma_l)
     g_U_red = (judge_basis.T @ (scale_l * gU_l)).ravel()
-    g_mu_red = item_basis.T @ (gmu_h / n_0 + scale_l * gmu_l)
-    g_V_red = (item_basis.T @ (gV_h / n_0 + scale_l * gV_l)).ravel()
+    g_mu_red = item_basis.T @ (gmu_h / n_H + scale_l * gmu_l)
+    g_V_red = (item_basis.T @ (gV_h / n_H + scale_l * gV_l)).ravel()
     parts = [g_gamma_red, g_U_red]
     if use_order:
         parts.append(scale_l * gb_l)
-    parts.extend([g_mu_red, g_V_red, np.array([galpha / n_0]), ga / n_0])
+    parts.extend([g_mu_red, g_V_red, np.array([galpha / n_H]), ga / n_H])
     return q, np.concatenate(parts)
 
 
@@ -212,7 +212,7 @@ def gacv_for_fit(
     hess_eps=1e-5,
 ):
     use_order = n_order is not None
-    n_0 = float(z_obs.size)
+    n_H = float(z_obs.size)
     n_L = total_llm_n(n_ijk, n_order=n_order)
     lam = float(fit["lam"])
     pair_arrays = pairs_to_arrays(human_pairs)
@@ -223,20 +223,20 @@ def gacv_for_fit(
     def grad_fn(z):
         return q_lambda_grad(
             z, N, K, r, judge_basis, item_basis, use_order,
-            n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L,
+            n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_H, n_L,
         )
 
     q_val, _ = grad_fn(zeta)
     hess = hessian_from_grad(grad_fn, zeta, eps=hess_eps)
     g_t = human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i_obs, j_obs, z_obs)
     g_bar = g_t.mean(axis=0)
-    emp_j = ((g_t - g_bar).T @ (g_t - g_bar)) / n_0
+    emp_j = ((g_t - g_bar).T @ (g_t - g_bar)) / n_H
     hess_inv = np.linalg.pinv(hess, rcond=rcond)
     a_fit = np.atleast_1d(np.asarray(fit["a"], dtype=float))
-    ell_h = human_nll_and_grad(fit["alpha_H"], a_fit, fit["mu"], np.asarray(fit["V"], dtype=float)[:, :a_fit.size], pair_arrays)[0] / n_0
-    if n_0 <= 1:
+    ell_h = human_nll_and_grad(fit["alpha_H"], a_fit, fit["mu"], np.asarray(fit["V"], dtype=float)[:, :a_fit.size], pair_arrays)[0] / n_H
+    if n_H <= 1:
         raise ValueError("GACV requires at least two human comparisons")
-    gacv = float(ell_h + tr_product(hess_inv, emp_j) / (n_0 - 1.0))
+    gacv = float(ell_h + tr_product(hess_inv, emp_j) / (n_H - 1.0))
     # Regularity (Assumption a2-gacv): the chart has exactly r(r+1) exact invariance directions
     # (factor rotations and mu-mixing), so the Hessian may have that many zero eigenvalues and no more.
     eig = np.linalg.eigvalsh(hess)
@@ -254,22 +254,22 @@ def gacv_for_fit(
 
 
 def endpoint_gacv(X, s_hat, i_obs, j_obs, z_obs, rcond=1e-8):
-    """GACV for a fixed-design logistic fit with per-observation design rows X (n_0, d).
+    """GACV for a fixed-design logistic fit with per-observation design rows X (n_H, d).
 
     Used for the endpoints: lambda = 0 (X = centered item-difference rows, d = N - 1) and
     lambda = inf (X = W_i - W_j with W fixed at the LLM-only fit, d = r + 1).
     Returns the criterion and a regularity flag (finite fit, nonsingular Hessian).
     """
-    n_0 = float(z_obs.size)
+    n_H = float(z_obs.size)
     d = s_hat[i_obs] - s_hat[j_obs]
     p = expit(d)
-    H = (X * (p * (1 - p))[:, None]).T @ X / n_0
+    H = (X * (p * (1 - p))[:, None]).T @ X / n_H
     G = X * (p - z_obs)[:, None]
-    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_0
+    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_H
     ell = float(np.mean(np.logaddexp(0.0, d) - z_obs * d))
     eig = np.linalg.eigvalsh(H)
     regular = bool(eig.min() > rcond * max(eig.max(), 1e-300)) and float(np.max(np.abs(s_hat))) < 25.0
-    return {"gacv": ell + float(np.trace(np.linalg.pinv(H, rcond=rcond) @ J)) / (n_0 - 1), "ell_H": ell, "regular": regular}
+    return {"gacv": ell + float(np.trace(np.linalg.pinv(H, rcond=rcond) @ J)) / (n_H - 1), "ell_H": ell, "regular": regular}
 
 
 def tr_product(hess_inv, emp_j):
@@ -364,9 +364,9 @@ def select_lambda(
     if use_order and n_ijk_llm is None:
         n_ijk_llm, y_ijk_llm = collapse_order_counts(n_order, y_order)
     n_L = total_llm_n(n_ijk_llm, n_order=n_order)
-    n_0_pairs = total_human_n(human_pairs)
+    n_H_pairs = total_human_n(human_pairs)
     if lambda_grid is None:
-        lambda_grid = default_lambda_grid(n_L, n_0_pairs)
+        lambda_grid = default_lambda_grid(n_L, n_H_pairs)
     lambda_grid = sorted(float(l) for l in lambda_grid)
     if warm_start:
         lambda_grid = lambda_grid[::-1]

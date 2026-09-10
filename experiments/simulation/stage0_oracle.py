@@ -1,7 +1,7 @@
 """Stage 0 oracle sanity checks (plan Section 3): known rank, well-specified DGP.
 
-For each (config, n_L, n_0, seed) fit human-only, oracle-W calibration, the
-staged endpoint, and the joint MLE (lambda = n_L / n_0), and record bias,
+For each (config, n_L, n_H, seed) fit human-only, oracle-W calibration, the
+staged endpoint, and the joint MLE (lambda = n_L / n_H), and record bias,
 error, population excess risk, and 95% coverage of pairwise contrasts of s_0,
 entries of b, and entries of S. Also checks invariance of the joint fit to a
 rotation of the initial factor basis and logs optimizer regularity.
@@ -47,7 +47,7 @@ CONFIGS = {
     "hja_size": dict(N=8, K=4, r=1),
     "main": dict(N=30, K=6, r=2),
 }
-DEFAULT_GRID = dict(n_L=[3000, 30000], n_0=[60, 240, 960, 3840])
+DEFAULT_GRID = dict(n_L=[3000, 30000], n_H=[60, 240, 960, 3840])
 
 
 def _cover(truth, ci):
@@ -59,10 +59,10 @@ def _width(ci):
 
 
 def one_seed(args):
-    cfg_name, n_L, n_0, seed, check_basis = args
+    cfg_name, n_L, n_H, seed, check_basis = args
     cfg = CONFIGS[cfg_name]
     N, K, r = cfg["N"], cfg["K"], cfg["r"]
-    out = dict(config=cfg_name, N=N, K=K, r=r, n_L=n_L, n_0=n_0, seed=seed, failures={})
+    out = dict(config=cfg_name, N=N, K=K, r=r, n_L=n_L, n_H=n_H, seed=seed, failures={})
     t0 = time.perf_counter()
 
     mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=seed)
@@ -71,7 +71,7 @@ def one_seed(args):
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3)
-    hum = generate_random_human_comparisons(s0, n_0, random_seed=seed + 4)
+    hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
     pairs = pool_pairs(hum)
@@ -177,10 +177,10 @@ def one_seed(args):
 def run(configs=("hja_size", "main"), grid=None, seeds=100, basis_seeds=10, workers=2, out_path=None):
     grid = grid or DEFAULT_GRID
     jobs = [
-        (c, n_L, n_0, s, s < basis_seeds)
+        (c, n_L, n_H, s, s < basis_seeds)
         for c in configs
         for n_L in grid["n_L"]
-        for n_0 in grid["n_0"]
+        for n_H in grid["n_H"]
         for s in range(seeds)
     ]
     records = []
@@ -198,13 +198,13 @@ def run(configs=("hja_size", "main"), grid=None, seeds=100, basis_seeds=10, work
 
 
 def summarize(payload, regular_only=False):
-    """Aggregate to one row per (config, n_L, n_0, method) and evaluate pass criteria."""
+    """Aggregate to one row per (config, n_L, n_H, method) and evaluate pass criteria."""
     import pandas as pd
 
     rows = []
     for rec in payload["records"]:
         for m, v in rec["methods"].items():
-            row = {k: rec[k] for k in ("config", "N", "K", "r", "n_L", "n_0", "seed")}
+            row = {k: rec[k] for k in ("config", "N", "K", "r", "n_L", "n_H", "seed")}
             row["method"] = m
             for key, val in v.items():
                 if key in ("bias", "b_bias"):
@@ -224,9 +224,9 @@ def summarize(payload, regular_only=False):
         df["irregular"] = False
     if regular_only:
         df = df[~df["irregular"]]
-    fail = pd.DataFrame([{**{k: rec[k] for k in ("config", "n_L", "n_0", "seed")}, "method": m, "err": e[:120]} for rec in payload["records"] for m, e in rec["failures"].items()])
+    fail = pd.DataFrame([{**{k: rec[k] for k in ("config", "n_L", "n_H", "seed")}, "method": m, "err": e[:120]} for rec in payload["records"] for m, e in rec["failures"].items()])
 
-    grp = df.groupby(["config", "N", "r", "n_L", "n_0", "method"])
+    grp = df.groupby(["config", "N", "r", "n_L", "n_H", "method"])
     agg = grp.agg(
         n=("seed", "size"),
         excess=("excess", "mean"),
@@ -247,9 +247,9 @@ def summarize(payload, regular_only=False):
         basis_s=("basis_max_diff_s", "max"),
         basis_b=("basis_max_diff_b", "max"),
     ).reset_index()
-    agg["n0_excess"] = agg["n_0"] * agg["excess"]
-    agg["n0_excess_se"] = agg["n_0"] * agg["excess_se"]
-    agg["theory_n0_excess"] = np.where(agg["method"] == "human_only", (agg["N"] - 1) / 2, (agg["r"] + 1) / 2)
+    agg["nH_excess"] = agg["n_H"] * agg["excess"]
+    agg["nH_excess_se"] = agg["n_H"] * agg["excess_se"]
+    agg["theory_nH_excess"] = np.where(agg["method"] == "human_only", (agg["N"] - 1) / 2, (agg["r"] + 1) / 2)
 
     # bias z-scores: mean bias vector / MC se, max over coordinates
     def bias_z(sub, col):
@@ -261,7 +261,7 @@ def summarize(payload, regular_only=False):
         return float(np.max(np.abs(mean) / np.where(se > 0, se, np.inf)))
 
     bz = grp.apply(lambda sub: pd.Series({"bias_z_s": bias_z(sub, "bias"), "bias_z_b": bias_z(sub, "b_bias") if "b_bias_vec" in sub else np.nan})).reset_index()
-    agg = agg.merge(bz, on=["config", "N", "r", "n_L", "n_0", "method"])
+    agg = agg.merge(bz, on=["config", "N", "r", "n_L", "n_H", "method"])
     return agg, fail, df
 
 
@@ -272,11 +272,11 @@ if __name__ == "__main__":
     p.add_argument("--seeds", type=int, default=100)
     p.add_argument("--configs", nargs="+", default=["hja_size", "main"])
     p.add_argument("--n_L", nargs="+", type=int, default=DEFAULT_GRID["n_L"])
-    p.add_argument("--n_0", nargs="+", type=int, default=DEFAULT_GRID["n_0"])
+    p.add_argument("--n_H", nargs="+", type=int, default=DEFAULT_GRID["n_H"])
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default="results/stage0_oracle/latest.json")
     a = p.parse_args()
-    payload = run(configs=a.configs, grid=dict(n_L=a.n_L, n_0=a.n_0), seeds=a.seeds, workers=a.workers, out_path=a.out)
+    payload = run(configs=a.configs, grid=dict(n_L=a.n_L, n_H=a.n_H), seeds=a.seeds, workers=a.workers, out_path=a.out)
     agg, fail, df_all = summarize(payload)
     agg_reg, _, _ = summarize(payload, regular_only=True)
     import pandas as pd
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     print(agg.round(4).to_string())
     print("\nfailures:", len(fail))
     if len(fail):
-        print(fail.groupby(["config", "n_L", "n_0", "method"]).size())
+        print(fail.groupby(["config", "n_L", "n_H", "method"]).size())
     agg.to_csv(Path(a.out).with_suffix(".summary.csv"), index=False)
     agg_reg.to_csv(Path(a.out).with_suffix(".summary_regular.csv"), index=False)
     irr = df_all[df_all["irregular"]][["config", "n_L", "seed"]].drop_duplicates()

@@ -252,6 +252,61 @@ def fit_centered_btl_from_pairs(N, pairs, initial=None, maxiter=500):
     return project_zero_sum(result.x)
 
 
+def firth_penalized_loss_and_grad(N, pairs, s, arrays=None):
+    """Firth-penalized centered BTL objective NLL(s) - (1/2) log det J(s) and its gradient, with
+    J(s) the centered Fisher information (comparison Laplacian of app:clustered) restricted to
+    the zero-sum subspace via `make_centering_basis`. See `fit_centered_btl_firth`.
+
+    The log-determinant gradient uses the standard hat-matrix identity
+    d/ds_k log det J(s) = sum_c (1 - 2 p_c) h_c x_{c,k}, h_c = w_c (X J(s)^+ X^T)_{cc}, the
+    weighted-least-squares leverage of comparison c (sum_c h_c = N - 1 by construction).
+    """
+    i_idx, j_idx, n_arr, y_arr = _pairs_arrays(pairs) if arrays is None else arrays
+    s = np.asarray(s, dtype=float)
+    nll, grad_nll = centered_btl_loss_and_grad_from_pairs(N, pairs, s, arrays=(i_idx, j_idx, n_arr, y_arr))
+    X = np.zeros((i_idx.size, N), dtype=float)
+    X[np.arange(i_idx.size), i_idx] = 1.0
+    X[np.arange(i_idx.size), j_idx] = -1.0
+    diff = s[i_idx] - s[j_idx]
+    p = expit(diff)
+    w = n_arr * p * (1.0 - p)
+    info = X.T @ (X * w[:, None])
+    B = make_centering_basis(N)
+    sign, logdet = np.linalg.slogdet(B.T @ info @ B)
+    logdet = logdet if sign > 0 else -1e10          # degenerate point (all weights collapsing); steers the optimizer away
+    info_pinv = np.linalg.pinv(info)
+    h = w * np.einsum("cj,cj->c", X @ info_pinv, X)
+    grad_logdet = X.T @ ((1.0 - 2.0 * p) * h)
+    loss = nll - 0.5 * logdet
+    grad = grad_nll - 0.5 * grad_logdet
+    return loss, grad
+
+
+def fit_centered_btl_firth(N, pairs, initial=None, maxiter=500):
+    """Firth (1993) bias-reduced centered BTL fit: minimizes `firth_penalized_loss_and_grad`
+    over the zero-sum subspace. Firth's penalty makes the objective finite everywhere and gives
+    a unique interior minimizer even under Ford (1957) separation, where
+    `fit_centered_btl_from_pairs` diverges; used as the existence fallback in
+    `calibration_restriction_test` (app:subsubsec:planner item 4). This is a standard
+    bias-reduction heuristic (bias O(1/n) versus the plain MLE's O(1/sqrt(n)), Firth 1993); using
+    it specifically to replace a non-existent MLE is outside what that asymptotic argument covers
+    and is validated empirically rather than proved (see the manuscript remark).
+    """
+    arrays = _pairs_arrays(pairs)
+
+    def objective(s_free):
+        s = project_zero_sum(s_free)
+        loss, grad = firth_penalized_loss_and_grad(N, pairs, s, arrays=arrays)
+        return loss, project_zero_sum(grad)
+
+    x0 = np.zeros(N, dtype=float) if initial is None else project_zero_sum(initial)
+    bounds = [(-30.0, 30.0)] * N          # keeps unbounded L-BFGS-B trial steps from overflowing the weight/log-det computation; never binds at a genuine optimum
+    result = minimize(objective, x0=x0, method="L-BFGS-B", jac=True, bounds=bounds, options={"maxiter": maxiter, "gtol": 1e-6})
+    if not result.success:
+        raise RuntimeError(f"Firth centered BTL fit failed: {result.message}")
+    return project_zero_sum(result.x)
+
+
 def reanchor(gamma, mu, U, V, delta_mu=1e-8, delta_sigma=1e-8, sum_tol=1e-8, check_sum=True):
     gamma = np.asarray(gamma, dtype=float)
     mu = np.asarray(mu, dtype=float)

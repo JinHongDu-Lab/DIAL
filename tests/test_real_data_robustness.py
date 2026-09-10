@@ -115,6 +115,27 @@ def test_calibration_restriction_test():
     assert t_wrong["stat"] > t_true["stat"] and t_wrong["pvalue"] < 0.01
     t_full = calibration_restriction_test(N, pairs, np.column_stack([s0, np.eye(N)[:, :3] - 1 / N]))
     assert t_full["df"] == 0
+    assert t_true["s_full_method"] == "mle"
+
+
+def test_calibration_restriction_test_firth_fallback():
+    """Under Ford (1957) separation the unrestricted fit falls back to Firth's bias-reduced
+    estimator (app:subsubsec:planner item 4) instead of silently returning the divergent MLE."""
+    rng = np.random.default_rng(3)
+    N = 5
+    s0 = np.array([1.0, 0.5, 0.0, -0.5, -1.0])
+    pairs = []
+    for i in range(N):
+        for j in range(i + 1, N):
+            n = 30
+            y = n if i == 0 else rng.binomial(n, 1 / (1 + np.exp(-(s0[i] - s0[j]))))   # item 0 never loses
+            pairs.append((i, j, float(n), float(y)))
+    t = calibration_restriction_test(N, pairs, s0)
+    assert not t["human_only_exists"] and t["s_full_method"] == "firth"
+    assert np.all(np.isfinite(t["s_full"])) and np.max(np.abs(t["s_full"])) < 30.0
+    assert t["stat"] >= 0.0 and np.isfinite(t["stat"])
+    t_off = calibration_restriction_test(N, pairs, s0, firth_fallback=False)
+    assert t_off["s_full_method"] == "mle"
 
 
 def test_jobs():
@@ -124,7 +145,7 @@ def test_jobs():
     assert len(zero) == 2 * len(cfg["sweeps"]["noise"]["datasets"]) and {j[3] for j in zero} == {cfg["sweeps"]["noise"]["kinds"][0]}
     assert all(j[2] == "biased5" for j in jobs)
     lb = rb.jobs_for("llm_budget", cfg, range(1), smoke=True)
-    grid = cfg["sweeps"]["llm_budget"]["n_0_grid"]
+    grid = cfg["sweeps"]["llm_budget"]["n_H_grid"]
     n_expected = sum(2 * 2 * len(rb.per_dataset(grid, d)) for d in cfg["sweeps"]["llm_budget"]["datasets"])
     assert len(lb) == n_expected and {j[5] for j in lb if j[0] == "arena_33k"} == set(rb.per_dataset(grid, "arena_33k"))
     assert {j[4] for j in lb if j[0] == "mt_bench"} == set(rb.per_dataset(cfg["sweeps"]["llm_budget"]["levels"], "mt_bench")[:2])
@@ -142,7 +163,7 @@ def test_jobs():
 def test_paired_design_across_levels(monkeypatch):
     frame = _frame(n_records=200, judges=("j1", "j2", "j3"), items=("m1", "m2", "m3", "m4"), seed=5)
     cfg = rb.load_config()
-    cfg["mt_bench"] = dict(f_test=0.3, n_0=40)
+    cfg["mt_bench"] = dict(f_test=0.3, n_H=40)
     cfg["sweeps"]["order"]["datasets"] = ["mt_bench"]
     monkeypatch.setattr(rb, "_PANELS", {"mt_bench": rb.build_panel(frame)})
     a = rb.run_cell(("mt_bench", "order", "all", "none", 1.0, None, 7, cfg))

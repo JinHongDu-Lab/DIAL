@@ -86,7 +86,7 @@ def fit_dial(
 ):
     """DIAL joint estimator: ell_H + lambda ell_L, with optional position effects.
 
-    `lam=None` uses n_L / n_0 (ordinary joint likelihood). For GACV selection
+    `lam=None` uses n_L / n_H (ordinary joint likelihood). For GACV selection
     of lambda use fit_dial_gacv.
     """
     return _joint(

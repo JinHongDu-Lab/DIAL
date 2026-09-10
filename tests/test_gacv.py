@@ -11,7 +11,7 @@ from dial_judge.hja import make_centering_basis
 
 
 def test_default_lambda_grid_contains_joint_mle_weight():
-    grid = default_lambda_grid(n_L=600, n_0=120, n_points=6)
+    grid = default_lambda_grid(n_L=600, n_H=120, n_points=6)
     assert 5.0 in grid
     assert grid == sorted(grid)
     assert all(value > 0 for value in grid)
@@ -62,7 +62,7 @@ def test_gacv_objective_gradient_matches_finite_difference(small_study):
         use_order=True,
     )
     pair_arrays = pairs_to_arrays(small_study["human_pairs"])
-    n_0 = total_human_n(small_study["human_pairs"])
+    n_H = total_human_n(small_study["human_pairs"])
     n_L = total_llm_n(small_study["n_ijk"], n_order=small_study["n_order"])
 
     def objective(value):
@@ -80,7 +80,7 @@ def test_gacv_objective_gradient_matches_finite_difference(small_study):
             small_study["y_order"],
             pair_arrays,
             1.2,
-            n_0,
+            n_H,
             n_L,
         )
 

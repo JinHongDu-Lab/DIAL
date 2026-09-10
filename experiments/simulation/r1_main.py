@@ -1,8 +1,8 @@
 """R1: well-specified simulation with the unified method panel, appendable per-seed storage.
 
 Rows of the main figure:
-  row "n0": x = human budget n_0 at fixed abundant n_L      (limited human supervision; theory lines)
-  row "nL": x = LLM budget n_L at fixed moderate n_0        (adaptive weighting under LLM overdispersion)
+  row "nH": x = human budget n_H at fixed abundant n_L      (limited human supervision; theory lines)
+  row "nL": x = LLM budget n_L at fixed moderate n_H        (adaptive weighting under LLM overdispersion)
 
 Data-generating process (plan Section 2 of code/plan/2026-09-02-main-experiments-plan.md, revised
 2026-09-07): LLM side S = gamma mu^T + U V^T at rank r with judge-specific position effects; human
@@ -13,7 +13,7 @@ c_v_sd = 0.5 so that the W-calibration has a direction to recover.
 Presented methods (experiments/style.py): human_only, pooled_cal, consensus_cal (staged endpoint of
 DIAL at rank r, s = alpha mu), dial_mu ("DIAL": joint weighted likelihood at rank r aligned to mu,
 GACV weight), dial_nodeb (DIAL without the order term). Diagnostics: staged_w, dial_w (W-calibration),
-dial_mle_mu, dial_mle_w (fixed weight n_L/n_0), oracle_mu, oracle_w (population-risk minimizers on the
+dial_mle_mu, dial_mle_w (fixed weight n_L/n_H), oracle_mu, oracle_w (population-risk minimizers on the
 respective GACV paths).
 
 Each (config, row, cell, seed) produces one JSON line per method in results/r1/<config>/rows.jsonl.
@@ -41,7 +41,15 @@ from dial_judge.data import comparisons_to_aggregated, comparisons_to_order_aggr
 from dial_judge.dial_model import fit_human_calibration
 from dial_judge.evaluate import sign_accuracy, spearman
 from dial_judge.gacv import select_lambda
-from dial_judge.inference import human_only_uq, joint_sandwich, pairwise_contrast_matrix, population_excess_risk
+from dial_judge.inference import (
+    calibration_restriction_test,
+    human_only_uq,
+    joint_sandwich,
+    misalignment_widened_contrasts,
+    noncentrality_interval,
+    pairwise_contrast_matrix,
+    population_excess_risk,
+)
 from dial_judge.simulate import (
     compute_human_score,
     compute_score_matrix,
@@ -54,24 +62,24 @@ from dial_judge.simulate import (
 
 CONFIGS = {
     # main-text figure: human target aligned with the consensus
-    "main10": dict(N=10, K=4, r=1, n_L_fixed=20000, n_0_fixed=800, swap_fraction=0.25, c_v_sd=0.0,
-                   sigma_L=dict(n0=0.0, nL=1.0),  # row 2 adds pair-level LLM overdispersion (LLM likelihood misspecified, human exact)
-                   n_0_grid=[100, 200, 400, 800, 1600], n_L_grid=[400, 800, 1600, 3200, 6400, 12800]),
+    "main10": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0,
+                   sigma_L=dict(nH=0.0, nL=1.0),  # row 2 adds pair-level LLM overdispersion (LLM likelihood misspecified, human exact)
+                   n_H_grid=[100, 200, 400, 800, 1600], n_L_grid=[400, 800, 1600, 3200, 6400, 12800]),
     # appendix replicate
-    "app20": dict(N=20, K=6, r=2, n_L_fixed=60000, n_0_fixed=2400, swap_fraction=0.25, c_v_sd=0.0, sigma_L=dict(n0=0.0, nL=1.0),
-                  n_0_grid=[300, 600, 1200, 2400, 4800], n_L_grid=[2400, 4800, 9600, 19200, 38400, 76800]),
+    "app20": dict(N=20, K=6, r=2, n_L_fixed=60000, n_H_fixed=2400, swap_fraction=0.25, c_v_sd=0.0, sigma_L=dict(nH=0.0, nL=1.0),
+                  n_H_grid=[300, 600, 1200, 2400, 4800], n_L_grid=[2400, 4800, 9600, 19200, 38400, 76800]),
     # appendix: human target with a component in col(V) (the pre-2026-09-07 DGP), where the W-calibration is needed
-    "main10_mis": dict(N=10, K=4, r=1, n_L_fixed=20000, n_0_fixed=800, swap_fraction=0.25, c_v_sd=0.5,
-                       sigma_L=dict(n0=0.0, nL=1.0), n_0_grid=[100, 200, 400, 800, 1600], n_L_grid=[400, 800, 1600, 3200, 6400, 12800]),
+    "main10_mis": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.5,
+                       sigma_L=dict(nH=0.0, nL=1.0), n_H_grid=[100, 200, 400, 800, 1600], n_L_grid=[400, 800, 1600, 3200, 6400, 12800]),
 }
 METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_mu", "oracle_w"]
 
 
 def cells_for(cfg, row):
     c = CONFIGS[cfg]
-    if row == "n0":
-        return [(c["n_L_fixed"], n0) for n0 in c["n_0_grid"]]
-    return [(nL, c["n_0_fixed"]) for nL in c["n_L_grid"]]
+    if row == "nH":
+        return [(c["n_L_fixed"], nH) for nH in c["n_H_grid"]]
+    return [(nL, c["n_H_fixed"]) for nL in c["n_L_grid"]]
 
 
 def _cover(truth, ci):
@@ -79,12 +87,12 @@ def _cover(truth, ci):
 
 
 def run_cell(args):
-    cfg_name, row, n_L, n_0, seed = args
+    cfg_name, row, n_L, n_H, seed = args
     c = CONFIGS[cfg_name]
     N, K, r = c["N"], c["K"], c["r"]
     rho = c.get("swap_fraction", 0.5)
     sigma_L = c.get("sigma_L", {}).get(row, 0.0)
-    base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_0=n_0, seed=seed, swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
+    base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_H=n_H, seed=seed, swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
     t0 = time.perf_counter()
     out = []
 
@@ -94,7 +102,7 @@ def run_cell(args):
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3, swap_fraction=rho, overdispersion=sigma_L)
-    hum = generate_random_human_comparisons(s0, n_0, random_seed=seed + 4)
+    hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
     pairs = pool_pairs(hum)
@@ -116,13 +124,38 @@ def run_cell(args):
         b_hat = np.asarray(b_hat, dtype=float)
         return dict(b_rmse=float(np.sqrt(np.mean((b_hat - b) ** 2))), b_sign_acc=float(np.mean(np.sign(b_hat) == np.sign(b))))
 
+    def b_metrics_zero():
+        """Pooled and DIAL-noPos have no order parameter, so they act as b_hat = 0.
+        Recording that RMSE (= the root mean square of the true effects) keeps them in the
+        order-effect panel instead of leaving a gap the shared legend invites misreading.
+        b_sign_acc stays out: the sign of a zero estimate is undefined."""
+        return dict(b_rmse=float(np.sqrt(np.mean(b ** 2))), b_is_zero=True)
+
     def S_of(fit):
         return np.outer(fit["gamma"], fit["mu"]) + (fit["U"] @ fit["V"].T if r > 0 else 0.0)
 
-    def sandwich_fields(fit):
+    def sandwich_fields(fit, W):
+        """W is the fitted calibration design (mu alone for align='mu', [mu, V] for align='W'),
+        used only for the interval-widening diagnostic below; the point/covariance estimates
+        of `fit` itself are unaffected."""
         sw = joint_sandwich(fit, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="pair")
         sw_iid = joint_sandwich(fit, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order)
-        return dict(cov_s=_cover(tc, sw["contrasts"]), width_s=float(np.mean(sw["contrasts"]["upper"] - sw["contrasts"]["lower"])), cov_s_iid=_cover(tc, sw_iid["contrasts"]), cov_b=_cover(b, sw["b"]))
+        out = dict(cov_s=_cover(tc, sw["contrasts"]), width_s=float(np.mean(sw["contrasts"]["upper"] - sw["contrasts"]["lower"])),
+                   cov_s_iid=_cover(tc, sw_iid["contrasts"]), cov_b=_cover(b, sw["b"]))
+        # prop:local-misalignment interval widening (main.tex "Interval validity under local
+        # misalignment"): restores nominal coverage for contrasts not represented by col(W).
+        try:
+            ct = calibration_restriction_test(N, pairs, W)
+            _, delta_hi_raw = noncentrality_interval(ct["stat"], ct["df"], level=0.95)
+            delta_hi = delta_hi_raw / (2.0 * sw["n_H"])
+            wc = misalignment_widened_contrasts(sw, N, pairs, ct["s_full"], delta_hi)
+            out.update(
+                cov_s_widened=_cover(tc, dict(lower=wc["lower_widened"], upper=wc["upper_widened"])),
+                width_s_widened=float(np.mean(wc["upper_widened"] - wc["lower_widened"])),
+            )
+        except Exception:  # noqa: BLE001 -- diagnostic only, never blocks the primary fields above
+            pass
+        return out
 
     # human-only
     try:
@@ -136,11 +169,11 @@ def run_cell(args):
     try:
         pooled = fit_pooled_btl(N, n_ijk, y_ijk)["score"]
         al, _ = fit_human_calibration(pooled, np.zeros((N, 0)), pairs)
-        rec("pooled_cal", al * pooled, alpha=float(al))
+        rec("pooled_cal", al * pooled, alpha=float(al), **b_metrics_zero())
     except Exception as e:  # noqa: BLE001
         fail("pooled_cal", e)
 
-    # Consensus-cal (staged endpoint of DIAL) and DIAL (align mu)
+    # Cons-Cal (staged endpoint of DIAL) and DIAL (align mu)
     st_mu = None
     try:
         st_mu = fit_consensus_only_calibrated(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order)
@@ -153,7 +186,7 @@ def run_cell(args):
             lam_hat = float(sel["lam"])
             extra = dict(lam=lam_hat, n_dropped=len(sel["dropped"]), converged=bool(sel.get("fit_info", {}).get("converged", True)))
             if np.isfinite(lam_hat) and lam_hat > 0:
-                extra.update(sandwich_fields(sel))
+                extra.update(sandwich_fields(sel, sel["mu"].reshape(-1, 1)))
             if lam_hat > 0:
                 extra.update(S_mse=float(np.mean((S_of(sel) - S) ** 2)), **b_metrics(sel["b"]))
             rec("dial_mu", sel["s_H"], **extra)
@@ -164,16 +197,16 @@ def run_cell(args):
             fail("dial_mu", e)
         try:
             jt = fit_dial(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order, init_params=(st_mu["gamma"], st_mu["mu"], st_mu["U"], st_mu["V"], st_mu["b"]), tol=1e-6, max_steps=30, align="mu")
-            rec("dial_mle_mu", jt["s_H"], lam=float(jt["lam"]), converged=bool(jt["fit_info"]["converged"]), S_mse=float(np.mean((S_of(jt) - S) ** 2)), **b_metrics(jt["b"]), **sandwich_fields(jt))
+            rec("dial_mle_mu", jt["s_H"], lam=float(jt["lam"]), converged=bool(jt["fit_info"]["converged"]), S_mse=float(np.mean((S_of(jt) - S) ** 2)), **b_metrics(jt["b"]), **sandwich_fields(jt, jt["mu"].reshape(-1, 1)))
         except Exception as e:  # noqa: BLE001
             fail("dial_mle_mu", e)
 
-    # DIAL-noDeb: DIAL without the order term
+    # DIAL-noPos: DIAL without the order term
     try:
         st0 = fit_consensus_only_calibrated(N, K, r, n_ijk, y_ijk, pairs)
         sel0 = select_lambda(N, K, r, pairs, n_ijk_llm=n_ijk, y_ijk_llm=y_ijk, staged_fit=st0, align="mu")
         rec("dial_nodeb", sel0["s_H"], lam=float(sel0["lam"]), n_dropped=len(sel0["dropped"]), converged=bool(sel0.get("fit_info", {}).get("converged", True)),
-            S_mse=float(np.mean((S_of(sel0) - S) ** 2)) if sel0.get("mu") is not None else None)
+            S_mse=float(np.mean((S_of(sel0) - S) ** 2)) if sel0.get("mu") is not None else None, **b_metrics_zero())
     except Exception as e:  # noqa: BLE001
         fail("dial_nodeb", e)
 
@@ -185,7 +218,7 @@ def run_cell(args):
         lamw = float(selw["lam"])
         extra = dict(lam=lamw, n_dropped=len(selw["dropped"]), converged=bool(selw.get("fit_info", {}).get("converged", True)))
         if np.isfinite(lamw) and lamw > 0:
-            extra.update(sandwich_fields(selw))
+            extra.update(sandwich_fields(selw, np.column_stack([selw["mu"], selw["V"]])))
         if lamw > 0:
             extra.update(S_mse=float(np.mean((S_of(selw) - S) ** 2)), **b_metrics(selw["b"]))
         rec("dial_w", selw["s_H"], **extra)
@@ -193,7 +226,7 @@ def run_cell(args):
         lam_o, _, f_o = min(risks, key=lambda x: x[1])
         rec("oracle_w", f_o["s_H"], lam=float(lam_o))
         jtw = fit_dial(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order, init_params=(st_w["gamma"], st_w["mu"], st_w["U"], st_w["V"], st_w["b"]), tol=1e-6, max_steps=30, align="W")
-        rec("dial_mle_w", jtw["s_H"], lam=float(jtw["lam"]), converged=bool(jtw["fit_info"]["converged"]), **b_metrics(jtw["b"]), **sandwich_fields(jtw))
+        rec("dial_mle_w", jtw["s_H"], lam=float(jtw["lam"]), converged=bool(jtw["fit_info"]["converged"]), **b_metrics(jtw["b"]), **sandwich_fields(jtw, np.column_stack([jtw["mu"], jtw["V"]])))
     except Exception as e:  # noqa: BLE001
         fail("dial_w", e)
 
@@ -209,14 +242,15 @@ def existing_keys(path):
         with open(path) as f:
             for line in f:
                 d = json.loads(line)
-                keys.add((d["row"], d["n_L"], d["n_0"], d["seed"]))
+                row = "nH" if d["row"] == "n0" else d["row"]              # pre-rename rows.jsonl stored row "n0" and key "n_0"
+                keys.add((row, d["n_L"], d.get("n_H", d.get("n_0")), d["seed"]))
     return keys
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="main10", choices=sorted(CONFIGS))
-    p.add_argument("--row", default="both", choices=["n0", "nL", "both"])
+    p.add_argument("--row", default="both", choices=["nH", "nL", "both"])
     p.add_argument("--seeds", default="0:10", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)
@@ -225,8 +259,8 @@ def main():
     out = Path(a.out or f"results/r1/{a.config}/rows.jsonl")
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)
-    rows = ["n0", "nL"] if a.row == "both" else [a.row]
-    jobs = [(a.config, row, nL, n0, s) for row in rows for (nL, n0) in cells_for(a.config, row) for s in range(s0, s1) if (row, nL, n0, s) not in done]
+    rows = ["nH", "nL"] if a.row == "both" else [a.row]
+    jobs = [(a.config, row, nL, nH, s) for row in rows for (nL, nH) in cells_for(a.config, row) for s in range(s0, s1) if (row, nL, nH, s) not in done]
     print(f"{len(jobs)} cells to run ({len(done)} already stored) -> {out}", flush=True)
     t0 = time.perf_counter()
     with ProcessPoolExecutor(max_workers=a.workers) as ex, open(out, "a") as f:

@@ -1,4 +1,4 @@
-"""Stage 0 addendum: is sqrt(n_0)(s_hat - s_0) approximately normal with a consistently estimated variance?
+"""Stage 0 addendum: is sqrt(n_H)(s_hat - s_0) approximately normal with a consistently estimated variance?
 
 For each seed store the pairwise-contrast estimates and their estimated standard
 errors (joint sandwich; W-fixed for staged; Fisher for human-only), then compare
@@ -35,14 +35,14 @@ N, K, r = CFG["inspect"]
 
 
 def one(args):
-    n_L, n_0, seed = args
+    n_L, n_H, seed = args
     mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=seed)
     b = generate_plan_position_effects(K, random_seed=seed + 1)
     c_mu, c_v = generate_plan_calibration(V, random_seed=seed + 2)
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3)
-    hum = generate_random_human_comparisons(s0, n_0, random_seed=seed + 4)
+    hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
     pairs = pool_pairs(hum)
@@ -88,8 +88,8 @@ if __name__ == "__main__":
     cells = [(1000, 100), (1000, 400), (400, 400)]
     all_out = {}
     with ProcessPoolExecutor(2) as ex:
-        for n_L, n_0 in cells:
-            recs = list(ex.map(one, [(n_L, n_0, s) for s in range(seeds)], chunksize=4))
-            all_out[f"{n_L}_{n_0}"] = recs
-            analyze(recs, f"n_L={n_L}, n_0={n_0}")
+        for n_L, n_H in cells:
+            recs = list(ex.map(one, [(n_L, n_H, s) for s in range(seeds)], chunksize=4))
+            all_out[f"{n_L}_{n_H}"] = recs
+            analyze(recs, f"n_L={n_L}, n_H={n_H}")
     json.dump(all_out, open("results/stage0_oracle/normality.json", "w"))

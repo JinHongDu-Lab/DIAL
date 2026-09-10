@@ -2,10 +2,14 @@ import numpy as np
 
 from dial_judge.benchmarks import fit_hja
 from dial_judge.hja import (
+    fit_centered_btl_firth,
+    fit_centered_btl_from_pairs,
+    firth_penalized_loss_and_grad,
     negative_log_likelihood,
     negative_log_likelihood_and_grad,
     reanchor,
 )
+from dial_judge.gacv import btl_mle_exists
 
 
 def _central_difference(objective, value, index, eps=1e-6):
@@ -121,3 +125,57 @@ def test_separated_position_effect_hits_bound_and_converges():
     assert fit["fit_info"]["b_at_bound"] == 1
     assert abs(fit["b"][K - 1]) >= POSITION_EFFECT_BOUND - 1e-6 and np.all(np.abs(fit["b"][:-1]) < 2.0)
     assert np.all(np.isfinite(fit["mu"])) and np.max(np.abs(fit["mu"])) < 5.0
+
+
+def _random_pairs(N, s0, n_per_pair, rng):
+    pairs = []
+    for i in range(N):
+        for j in range(i + 1, N):
+            y = rng.binomial(n_per_pair, 1 / (1 + np.exp(-(s0[i] - s0[j]))))
+            pairs.append((i, j, float(n_per_pair), float(y)))
+    return pairs
+
+
+def test_firth_gradient_matches_finite_differences():
+    rng = np.random.default_rng(0)
+    N = 5
+    s0 = np.array([1.0, 0.4, 0.0, -0.3, -1.1])
+    pairs = _random_pairs(N, s0, 8, rng)
+    s = rng.normal(0, 0.5, N)
+    s -= s.mean()
+    _, grad = firth_penalized_loss_and_grad(N, pairs, s)
+    objective = lambda x: firth_penalized_loss_and_grad(N, pairs, x)[0]
+    fd = np.array([_central_difference(objective, s, k) for k in range(N)])
+    np.testing.assert_allclose(grad, fd, atol=1e-4)
+
+
+def test_firth_fit_close_to_mle_when_connected():
+    """Away from separation, Firth's O(1/n) bias correction is a small perturbation of the MLE."""
+    rng = np.random.default_rng(1)
+    N = 6
+    s0 = np.array([1.5, 0.8, 0.2, -0.1, -0.6, -1.8])
+    pairs = _random_pairs(N, s0, 40, rng)
+    assert btl_mle_exists(N, pairs)
+    s_mle = fit_centered_btl_from_pairs(N, pairs)
+    s_firth = fit_centered_btl_firth(N, pairs)
+    assert np.max(np.abs(s_mle - s_firth)) < 0.1
+    assert np.corrcoef(s_mle, s_firth)[0, 1] > 0.999
+
+
+def test_firth_fit_stays_finite_and_ordered_under_separation():
+    """A pure-source item (undefeated) breaks Ford (1957) connectivity and sends the plain MLE
+    toward the boundary; the Firth fit stays finite and preserves the identified sub-ranking."""
+    rng = np.random.default_rng(2)
+    N = 6
+    s0 = np.array([1.5, 0.8, 0.2, -0.1, -0.6, -1.8])
+    pairs = []
+    for i in range(N):
+        for j in range(i + 1, N):
+            n = 40
+            y = n if i == 0 else rng.binomial(n, 1 / (1 + np.exp(-(s0[i] - s0[j]))))   # item 0 never loses
+            pairs.append((i, j, float(n), float(y)))
+    assert not btl_mle_exists(N, pairs)
+    s_firth = fit_centered_btl_firth(N, pairs)
+    assert np.all(np.isfinite(s_firth)) and np.max(np.abs(s_firth)) < 30.0
+    assert s_firth[0] == np.max(s_firth)                        # the undefeated item is ranked first
+    assert np.all(np.diff(s_firth[1:]) < 0)                     # the identified sub-block (items 1..5) keeps its true order

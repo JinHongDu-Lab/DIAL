@@ -102,7 +102,7 @@ def run_study(module, dataset, args, stamp):
         + "\n",
         encoding="utf-8",
     )
-    print(outdir)
+    print(outdir.relative_to(Path.cwd()) if outdir.is_absolute() and outdir.is_relative_to(Path.cwd()) else outdir)
 
 
 def main():
@@ -135,7 +135,7 @@ def main():
         output = args.output or Path("results") / args.study / f"{dataset}-{stamp}.json"
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        print(output)
+        print(output.relative_to(Path.cwd()) if output.is_absolute() and output.is_relative_to(Path.cwd()) else output)
 
 
 if __name__ == "__main__":

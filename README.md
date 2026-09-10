@@ -26,8 +26,17 @@ conda activate llm
 python -m pip install -e '.[dev,viz]'
 ```
 
-`viz` adds matplotlib, pyarrow, and ipykernel for the analysis notebooks. The
-data-collection tools have separate optional dependencies:
+`viz` adds matplotlib, seaborn, pyarrow, and ipykernel for the analysis
+notebooks. To build an equivalent environment from scratch instead, use the
+checked-in spec (same floors as `pyproject.toml`, plus nbconvert and pymupdf for
+re-running and inspecting the figure notebooks):
+
+```bash
+conda env create -f environment.yml && conda activate dial
+python -m pip install -e .
+```
+
+The data-collection tools have separate optional dependencies:
 
 ```bash
 python -m pip install -e '.[data]'
@@ -82,7 +91,7 @@ provenance and the current analysis-integration status.
 
 | Method | Status |
 |---|---|
-| Human-only BTL | Implemented |
+| Human | Implemented |
 | LLM consensus | Implemented |
 | Consensus-only calibration | Implemented |
 | Staged structured calibration, `lambda = infinity` | Implemented |

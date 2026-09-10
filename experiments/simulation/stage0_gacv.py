@@ -1,11 +1,11 @@
 """Stage 0 addendum: GACV versus exact leave-one-human-comparison-out CV (Thm GACV, Prop gacv-additional).
 
-For each seed and n_0, over a lambda grid plus the endpoints {0, inf}:
+For each seed and n_H, over a lambda grid plus the endpoints {0, inf}:
   - fit DIAL, compute GACV(lambda);
   - compute CV_loo(lambda) exactly by refitting after deleting each human comparison
     (warm-started from the full fit, so each refit is an L-BFGS polish);
   - compute the population human risk R_0(s_hat_lambda).
-Report max_lambda |GACV - CV_loo| (should scale like n_0^{-2}), agreement of the
+Report max_lambda |GACV - CV_loo| (should scale like n_H^{-2}), agreement of the
 selected lambda, and the excess-risk regret of lambda_hat relative to the grid minimizer.
 """
 from __future__ import annotations
@@ -57,33 +57,33 @@ def _delete_obs(pairs, i, j, z):
 
 
 def _gacv_endpoint_human_only(N, pairs, s_hat, i_obs, j_obs, z_obs):
-    """GACV at lambda = 0: chart = centered scores, H = Hessian of ell_H^full / n_0."""
+    """GACV at lambda = 0: chart = centered scores, H = Hessian of ell_H^full / n_H."""
     B = make_centering_basis(N)
-    n_0 = float(z_obs.size)
-    X = B[i_obs] - B[j_obs]  # (n_0, N-1)
+    n_H = float(z_obs.size)
+    X = B[i_obs] - B[j_obs]  # (n_H, N-1)
     p = expit(s_hat[i_obs] - s_hat[j_obs])
-    H = (X * (p * (1 - p))[:, None]).T @ X / n_0
+    H = (X * (p * (1 - p))[:, None]).T @ X / n_H
     G = X * (p - z_obs)[:, None]
-    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_0
+    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_H
     ell = np.mean([_h(s_hat, i, j, z) for i, j, z in zip(i_obs, j_obs, z_obs)])
-    return ell + np.trace(np.linalg.pinv(H) @ J) / (n_0 - 1)
+    return ell + np.trace(np.linalg.pinv(H) @ J) / (n_H - 1)
 
 
 def _gacv_endpoint_staged(W, c_hat, i_obs, j_obs, z_obs):
     """GACV at lambda = inf: chart = c with W fixed."""
-    n_0 = float(z_obs.size)
+    n_H = float(z_obs.size)
     s_hat = W @ c_hat
     X = W[i_obs] - W[j_obs]
     p = expit(s_hat[i_obs] - s_hat[j_obs])
-    H = (X * (p * (1 - p))[:, None]).T @ X / n_0
+    H = (X * (p * (1 - p))[:, None]).T @ X / n_H
     G = X * (p - z_obs)[:, None]
-    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_0
+    J = (G - G.mean(0)).T @ (G - G.mean(0)) / n_H
     ell = np.mean([_h(s_hat, i, j, z) for i, j, z in zip(i_obs, j_obs, z_obs)])
-    return ell + np.trace(np.linalg.pinv(H) @ J) / (n_0 - 1)
+    return ell + np.trace(np.linalg.pinv(H) @ J) / (n_H - 1)
 
 
 def one(args):
-    n_L, n_0, seed, n_grid = args
+    n_L, n_H, seed, n_grid = args
     t0 = time.perf_counter()
     mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=seed)
     b = generate_plan_position_effects(K, random_seed=seed + 1)
@@ -91,12 +91,12 @@ def one(args):
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3)
-    hum = generate_random_human_comparisons(s0, n_0, random_seed=seed + 4)
+    hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
     pairs = pool_pairs(hum)
     i_obs, j_obs, z_obs = observations_from_pairs(pairs)
-    mle = n_L / n_0
+    mle = n_L / n_H
     grid = [float(m * mle) for m in np.geomspace(0.05, 20.0, n_grid)]
 
     st = fit_staged_structured_calibration(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order)
@@ -130,7 +130,7 @@ def one(args):
 
     lams = np.array([x["lam"] for x in rows]); gacv = np.array([x["gacv"] for x in rows]); loo = np.array([x["loo"] for x in rows]); risk = np.array([x["risk"] for x in rows])
     return dict(
-        seed=seed, n_0=n_0, n_L=n_L, rows=rows, seconds=time.perf_counter() - t0,
+        seed=seed, n_H=n_H, n_L=n_L, rows=rows, seconds=time.perf_counter() - t0,
         max_gap=float(np.max(np.abs(gacv - loo))),
         lam_gacv=float(lams[np.argmin(gacv)]), lam_loo=float(lams[np.argmin(loo)]), lam_star=float(lams[np.argmin(risk)]),
         regret_gacv=float(risk[np.argmin(gacv)] - risk.min()), regret_loo=float(risk[np.argmin(loo)] - risk.min()),
@@ -146,15 +146,15 @@ if __name__ == "__main__":
     n_L = 1000
     out = {}
     with ProcessPoolExecutor(2) as ex:
-        for n_0 in cells:
-            recs = list(ex.map(one, [(n_L, n_0, s, n_grid) for s in range(seeds)]))
-            out[str(n_0)] = recs
+        for n_H in cells:
+            recs = list(ex.map(one, [(n_L, n_H, s, n_grid) for s in range(seeds)]))
+            out[str(n_H)] = recs
             json.dump(out, open(f"results/stage0_oracle/{tag}.json", "w"))
             gap = np.array([x["max_gap"] for x in recs])
-            print(f"n_0={n_0:4d}: max|GACV-LOO| mean {gap.mean():.2e} (sd {gap.std():.1e}) | argmin agree GACV=LOO {np.mean([x['lam_gacv']==x['lam_loo'] for x in recs]):.2f}, GACV=risk* {np.mean([x['lam_gacv']==x['lam_star'] for x in recs]):.2f}"
+            print(f"n_H={n_H:4d}: max|GACV-LOO| mean {gap.mean():.2e} (sd {gap.std():.1e}) | argmin agree GACV=LOO {np.mean([x['lam_gacv']==x['lam_loo'] for x in recs]):.2f}, GACV=risk* {np.mean([x['lam_gacv']==x['lam_star'] for x in recs]):.2f}"
                   f" | regret/min-risk: GACV {np.mean([x['regret_gacv'] for x in recs])/np.mean([x['risk_min'] for x in recs]):.3f}, LOO {np.mean([x['regret_loo'] for x in recs])/np.mean([x['risk_min'] for x in recs]):.3f}"
                   f" | mean risk: human {np.mean([x['risk_human'] for x in recs]):.4f} staged {np.mean([x['risk_staged'] for x in recs]):.4f} gacv {np.mean([x['risk_gacv'] for x in recs]):.4f} min {np.mean([x['risk_min'] for x in recs]):.4f}"
                   f" | {np.mean([x['seconds'] for x in recs]):.0f}s/seed", flush=True)
     gaps = {int(k): np.mean([x["max_gap"] for x in v]) for k, v in out.items()}
     xs, ys = np.log(np.array(list(gaps.keys()), float)), np.log(np.array(list(gaps.values())))
-    print(f"log-log slope of mean max|GACV-LOO| vs n_0: {np.polyfit(xs, ys, 1)[0]:.2f}  (Thm GACV: -2)")
+    print(f"log-log slope of mean max|GACV-LOO| vs n_H: {np.polyfit(xs, ys, 1)[0]:.2f}  (Thm GACV: -2)")

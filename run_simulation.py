@@ -43,7 +43,7 @@ def main():
     output = args.output or default_output(args.study)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(output)
+    print(output.relative_to(Path.cwd()) if output.is_absolute() and output.is_relative_to(Path.cwd()) else output)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,8 @@ The weighted joint criterion is the paper's normalized form
 
     ell_lambda(c, theta) = ell_H(c; W_theta) + lambda * ell_L(theta)
 
-with ell_H = L_H / n_0 and ell_L = L_L / n_L. Ordinary joint likelihood is
-lambda = n_L / n_0. Adaptive choice of lambda is in gacv.py.
+with ell_H = L_H / n_H and ell_L = L_L / n_L. Ordinary joint likelihood is
+lambda = n_L / n_H. Adaptive choice of lambda is in gacv.py.
 
 The two-stage / lambda=inf endpoint is not part of this module.
 """
@@ -178,7 +178,7 @@ def calibrated_score_uq(alpha, a, mu, V, pairs, alpha_level=0.05, rcond=1e-8):
     }
 
 
-def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L, maxiter=2000, gtol=1e-8):
+def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_H, n_L, maxiter=2000, gtol=1e-8):
     """
     L-BFGS on the weighted criterion q_lambda over the centering-reduced factor
     chart (gamma_red, U_red, [b], mu_red, V_red, alpha, a), followed by ReAnchor
@@ -193,7 +193,7 @@ def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_orde
     z0 = pack_reduced(gamma, mu, U, V, b, alpha, a, use_order)
 
     def fg(z):
-        return q_lambda_grad(z, N, K, r, jb, ib, use_order, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L)
+        return q_lambda_grad(z, N, K, r, jb, ib, use_order, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_H, n_L)
 
     bounds = chart_bounds(z0.size)
     res = minimize(fg, z0, jac=True, method="L-BFGS-B", bounds=bounds, options={"maxiter": maxiter, "gtol": gtol, "ftol": 1e-15})
@@ -212,10 +212,10 @@ def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_orde
     return gamma, mu, U, V, (b if use_order else np.zeros(K)), alpha, a, info
 
 
-def default_lambda(n_L, n_0):
-    if n_0 <= 0:
-        raise ValueError("n_0 must be positive")
-    return float(n_L / n_0)
+def default_lambda(n_L, n_H):
+    if n_H <= 0:
+        raise ValueError("n_H must be positive")
+    return float(n_L / n_H)
 
 
 def joint(
@@ -260,11 +260,11 @@ def joint(
         use_order = False
 
     n_L = total_llm_n(n_ijk_llm, n_order=n_order)
-    n_0 = total_human_n(human_pairs)
-    if n_L <= 0 or n_0 <= 0:
+    n_H = total_human_n(human_pairs)
+    if n_L <= 0 or n_H <= 0:
         raise ValueError("joint requires positive LLM and human comparison counts")
     if lam is None:
-        lam = default_lambda(n_L, n_0)
+        lam = default_lambda(n_L, n_H)
     lam = float(lam)
     if lam <= 0:
         raise ValueError(f"lambda must be positive, got {lam}")
@@ -288,7 +288,7 @@ def joint(
     def weighted_loss(gamma, mu, U, V, b, alpha, a):
         l_l = negative_log_likelihood(mu, gamma, U, V, n_ijk_llm, y_ijk_llm, b=b, n_order=n_order, y_order=y_order)
         l_h, _, _, _, _ = human_nll_and_grad(alpha, a, mu, V[:, :r_cal], pair_arrays)
-        return (l_h / n_0) + lam * (l_l / n_L), l_l, l_h
+        return (l_h / n_H) + lam * (l_l / n_L), l_l, l_h
 
     history = []
     inner_limit_hits = 0
@@ -350,17 +350,17 @@ def joint(
             )
             grad_V_h = np.zeros_like(V_new)
             grad_V_h[:, :r_cal] = grad_V_h_cal
-            grad_mu = grad_mu_h / n_0 + lam * grad_mu_l / n_L
-            grad_V = grad_V_h / n_0 + lam * grad_V_l / n_L
-            objective_value = (l_h / n_0) + lam * (l_l / n_L) + 0.5 * tau * np.sum((block - current_item_block) ** 2)
+            grad_mu = grad_mu_h / n_H + lam * grad_mu_l / n_L
+            grad_V = grad_V_h / n_H + lam * grad_V_l / n_L
+            objective_value = (l_h / n_H) + lam * (l_l / n_L) + 0.5 * tau * np.sum((block - current_item_block) ** 2)
             grad_reduced = np.empty_like(block)
             grad_reduced[: N - 1] = item_basis.T @ grad_mu + tau * (block[: N - 1] - current_mu_reduced)
             grad_reduced[N - 1: N - 1 + (N - 1) * r] = (
                 (item_basis.T @ grad_V).ravel()
                 + tau * (block[N - 1: N - 1 + (N - 1) * r] - current_V_reduced.ravel())
             )
-            grad_reduced[N - 1 + (N - 1) * r] = grad_alpha_h / n_0 + tau * (block[N - 1 + (N - 1) * r] - alpha)
-            grad_reduced[N - 1 + (N - 1) * r + 1:] = grad_a_h / n_0 + tau * (block[N - 1 + (N - 1) * r + 1:] - a)
+            grad_reduced[N - 1 + (N - 1) * r] = grad_alpha_h / n_H + tau * (block[N - 1 + (N - 1) * r] - alpha)
+            grad_reduced[N - 1 + (N - 1) * r + 1:] = grad_a_h / n_H + tau * (block[N - 1 + (N - 1) * r + 1:] - a)
             return objective_value, grad_reduced
 
         result_i = minimize(
@@ -394,7 +394,7 @@ def joint(
                 "iteration": step_index,
                 "total_loss": float(new_total),
                 "ell_L": float(l_l_new / n_L),
-                "ell_H": float(l_h_new / n_0),
+                "ell_H": float(l_h_new / n_H),
                 "rel_change": float(rel_change),
             }
         )
@@ -407,7 +407,7 @@ def joint(
     polish_info = {}
     if polish:
         gamma, mu, U, V, b, alpha, a, polish_info = polish_joint_fit(
-            gamma, mu, U, V, b, alpha, a, n_ijk_llm, y_ijk_llm, n_order, y_order, pair_arrays, lam, n_0, n_L, gtol=polish_gtol
+            gamma, mu, U, V, b, alpha, a, n_ijk_llm, y_ijk_llm, n_order, y_order, pair_arrays, lam, n_H, n_L, gtol=polish_gtol
         )
 
     a = np.atleast_1d(np.asarray(a, dtype=float))
@@ -425,7 +425,7 @@ def joint(
         "W": calibration_design(mu, calibration_columns(V, a)),
         "lam": lam,
         "n_L": n_L,
-        "n_0": n_0,
+        "n_H": n_H,
         "fit_info": {
             "n_iter": history[-1]["iteration"] if history else 0,
             "alternating_converged": alternating_converged,

@@ -5,21 +5,21 @@ the only ground truth. Sweeps (configs/real_robustness.toml):
 
   order       A2  swapped-copy share with a canonical-first default order
   noise       B1  injected anti-consensus / position-only judges, one-sided display, small panel
-  budget      C1  human budget n_0 with the as-collected balanced LLM data
+  budget      C1  human budget n_H with the as-collected balanced LLM data
   llm_budget  C2  LLM rows subsampled to n_L at fixed human budgets
   spectest    B2  specification test of s_0 = alpha mu on Arena human subsets
 
-Methods in every cell (presented): human-only BTL; Pooled-LLM (one BTL over all
+Methods in every cell (presented): human-only BTL; Pooled (one BTL over all
 judgments, no judge structure, no order term, plus a human-fitted scale);
-Consensus-cal (order-effect structured model at the LLM rank r, consensus mu, one
+Cons-Cal (order-effect structured model at the LLM rank r, consensus mu, one
 human-fitted scale: the lambda = infinity endpoint of DIAL); DIAL (`dial_mu`: joint
 weighted likelihood at rank r with the human score aligned to mu only, GACV weight);
-DIAL-noDeb (DIAL without the order term). Diagnostics: `staged_w`, `dial_w`,
+DIAL-noPos (DIAL without the order term). Diagnostics: `staged_w`, `dial_w`,
 `dial_mle_mu`, `dial_mle_w` (W-calibration and fixed-weight variants), `oracle_test`
 (test-loss-minimizing weight on DIAL's path), `dial_rsel` ((r, lambda) by GACV).
 
 Rows append to results/real_robustness/<dataset>/rows.jsonl keyed by
-(sweep, panel, kind, level, n_0, seed). Aggregation: robustness_plot.py; figures:
+(sweep, panel, kind, level, n_H, seed). Aggregation: robustness_plot.py; figures:
 notebooks/real_data_robustness.ipynb.
 """
 from __future__ import annotations
@@ -54,6 +54,14 @@ from .prepare import load_canonical
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "configs" / "real_robustness.toml"
 RESULTS_ROOT = ROOT / "results" / "real_robustness"
+
+
+def _display_path(path: Path) -> Path:
+    """Return *path* relative to ROOT when possible, otherwise return it unchanged."""
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path
 
 SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest", "planner")
 NOISE_KINDS = ("random", "position", "anti")
@@ -189,10 +197,10 @@ def amplify_bias(llm, theta, rng):
     return llm.assign(y=np.where(hit, (llm["a"].to_numpy() == 1).astype(float), llm["y"].to_numpy()))
 
 
-def draw_budget(human, n_0, rng):
-    if n_0 is None or n_0 < 0 or n_0 >= len(human):
+def draw_budget(human, n_H, rng):
+    if n_H is None or n_H < 0 or n_H >= len(human):
         return human
-    idx = rng.choice(len(human), size=int(n_0), replace=False)
+    idx = rng.choice(len(human), size=int(n_H), replace=False)
     return human.iloc[np.sort(idx)].reset_index(drop=True)
 
 
@@ -257,7 +265,7 @@ def clean_fit(dataset, cfg, cluster="pair", r=1):
     jt = fit_dial(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order, init_params=(st["gamma"], st["mu"], st["U"], st["V"], st["b"]), tol=1e-6, max_steps=30)
     sw = joint_sandwich(jt, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster=cluster)
     return dict(dataset=dataset, N=N, K=K, r=r, items=panel["items"], judges=panel["judges"], dropped_judges=panel["dropped_judges"],
-                n_L=float(n_order.sum()), n_0=float(sum(p[2] for p in pairs)), n_records=panel["n_records"], n_llm_ties=panel["n_llm_ties"], n_human_decisive=panel["n_human_decisive"],
+                n_L=float(n_order.sum()), n_H=float(sum(p[2] for p in pairs)), n_records=panel["n_records"], n_llm_ties=panel["n_llm_ties"], n_human_decisive=panel["n_human_decisive"],
                 b=[float(x) for x in jt["b"]], b_lower=[float(x) for x in sw["b"]["lower"]], b_upper=[float(x) for x in sw["b"]["upper"]],
                 gamma=[float(x) for x in jt["gamma"]], mu=[float(x) for x in jt["mu"]], s_H=[float(x) for x in jt["s_H"]],
                 s_human_only=[float(x) for x in fit_human_only_btl(N, pairs)["s_H"]], lam=float(jt["lam"]), staged_b=[float(x) for x in st["b"]], converged=bool(jt["fit_info"]["converged"]))
@@ -291,7 +299,7 @@ def per_dataset(value, dataset):
 
 
 def run_cell(job):
-    dataset, sweep, panel_name, kind, level, n_0_req, seed, cfg = job
+    dataset, sweep, panel_name, kind, level, n_H_req, seed, cfg = job
     scfg, dcfg, swcfg = cfg["study"], cfg[dataset], cfg["sweeps"][sweep]
     panel = restrict_panel(get_panel(dataset, cfg), None if panel_name == "all" else cfg["panels"][panel_name])
     code = DATASET_CODE[dataset]
@@ -302,15 +310,15 @@ def run_cell(job):
 
     rho = float(swcfg.get("rho_swap", 1.0))
     m, n_L_req = 0, -1
-    n_0 = int(n_0_req) if n_0_req is not None else int(dcfg["n_0"])
+    n_H = int(n_H_req) if n_H_req is not None else int(dcfg["n_H"])
     if sweep == "order":
         rho = float(level)
     elif sweep in ("noise", "noise_scarce"):
         m = int(level)
         if sweep == "noise_scarce":
-            n_0 = int(per_dataset(swcfg.get("n_0_fixed", n_0), dataset))
+            n_H = int(per_dataset(swcfg.get("n_H_fixed", n_H), dataset))
     elif sweep == "budget":
-        n_0 = int(level)
+        n_H = int(level)
     elif sweep == "llm_budget":
         n_L_req = int(level)
     else:
@@ -327,21 +335,21 @@ def run_cell(job):
     llm, K, K_real, K_dropped = drop_empty_judges(llm, K, K_real)   # a judge without rows has no estimable parameters
     hum_train = panel["human"][panel["human"]["record"].isin(train)].reset_index(drop=True)
     hum_test = panel["human"][panel["human"]["record"].isin(test) & (panel["human"]["y"] != 0.5)].reset_index(drop=True)
-    cal = draw_budget(hum_train, n_0, rng_budget)
+    cal = draw_budget(hum_train, n_H, rng_budget)
 
     N = panel["N"]
     A = llm_arrays(llm, N, K)
     pairs = human_pairs(cal)
     test_recs = human_records(hum_test)
-    n_L, n_0_actual = int(len(llm)), int(len(cal))
+    n_L, n_H_actual = int(len(llm)), int(len(cal))
     mults = scfg.get("lambda_multipliers")
-    lam_grid = [float(mm) * n_L / n_0_actual for mm in mults] if mults else None
+    lam_grid = [float(mm) * n_L / n_H_actual for mm in mults] if mults else None
     r_max = int(min(scfg.get("rank_select_max", 2), K - 1, N - 2))
 
     ref = fit_human_only_btl(N, human_pairs(hum_test))["s_H"]
     floor = heldout_log_loss(ref, test_recs)
     r_llm = int(min(scfg.get("llm_rank", 1), K - 1, N - 2))          # structural rank of the LLM side
-    base = dict(dataset=dataset, sweep=sweep, panel=panel_name, kind=kind, level=float(level), n_0=n_0_actual, n_0_level=int(n_0_req) if n_0_req is not None else -1, seed=int(seed),
+    base = dict(dataset=dataset, sweep=sweep, panel=panel_name, kind=kind, level=float(level), n_H=n_H_actual, n_H_level=int(n_H_req) if n_H_req is not None else -1, seed=int(seed),
                 N=N, K_real=K_real, K=K, K_dropped=K_dropped, r=r_llm, n_L=n_L, n_test=int(len(hum_test)), n_train_human=int(len(hum_train)), rho_swap=rho, m=int(m),
                 first_share=float(np.mean(llm["a"].to_numpy() == 1)), floor=floor, human_only_exists=bool(btl_mle_exists(N, pairs)))
     out = []
@@ -376,7 +384,7 @@ def run_cell(job):
 
     def lam_fields(lam):
         lam = float(lam)
-        return dict(lam=lam, lam_rel=(lam * n_0_actual / n_L) if np.isfinite(lam) else float("inf"))
+        return dict(lam=lam, lam_rel=(lam * n_H_actual / n_L) if np.isfinite(lam) else float("inf"))
 
     # ---- baselines
     if want("human_only"):
@@ -392,7 +400,7 @@ def run_cell(job):
         except Exception as e:  # noqa: BLE001
             fail("pooled_cal", e)
 
-    # ---- Consensus-cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
+    # ---- Cons-Cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
     st_mu = None
     if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu"):
         try:
@@ -419,7 +427,7 @@ def run_cell(job):
         except Exception as e:  # noqa: BLE001
             fail("dial_mle_mu", e)
 
-    # ---- DIAL-noDeb: same as DIAL without the order term
+    # ---- DIAL-noPos: same as DIAL without the order term
     if want("dial_nodeb"):
         try:
             st0 = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs)
@@ -459,7 +467,7 @@ def run_cell(job):
 
 def run_spectest(job):
     """B2: LR test of s_0 = alpha mu on a human subset, with the consensus from global or subset LLM data."""
-    setting, n_0, seed, cfg = job
+    setting, n_H, seed, cfg = job
     panel = get_panel("arena_33k", cfg)
     N, K = panel["N"], panel["K"]
     lang = panel["record_language"]
@@ -477,12 +485,12 @@ def run_spectest(job):
     A = llm_arrays(llm, N, K)
     r_llm = int(min(cfg["study"].get("llm_rank", 1), K - 1, N - 2))
     mu = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], [(0, 1, 2.0, 1.0)], n_order=A[2], y_order=A[3])["mu"]
-    cal = draw_budget(hum_tr, n_0, np.random.default_rng([int(seed), 12, int(n_0)]))
+    cal = draw_budget(hum_tr, n_H, np.random.default_rng([int(seed), 12, int(n_H)]))
     pairs = human_pairs(cal)
     test_recs = human_records(hum_te)
     floor = heldout_log_loss(fit_human_only_btl(N, human_pairs(hum_te))["s_H"], test_recs)
     t = calibration_restriction_test(N, pairs, mu)
-    return [dict(dataset="arena_33k", sweep="spectest", panel="all", kind=setting, level=float(n_0), n_0=int(len(cal)), seed=int(seed), N=N, K=K, n_L=int(len(llm)),
+    return [dict(dataset="arena_33k", sweep="spectest", panel="all", kind=setting, level=float(n_H), n_H=int(len(cal)), seed=int(seed), N=N, K=K, n_L=int(len(llm)),
                  n_test=int(len(hum_te)), stat=t["stat"], df=t["df"], pvalue=t["pvalue"], reject05=bool(t["pvalue"] < 0.05), human_only_exists=t["human_only_exists"],
                  excess_restricted=heldout_log_loss(t["s_restricted"], test_recs) - floor, excess_full=heldout_log_loss(t["s_full"], test_recs) - floor,
                  tau_mu_vs_test_human=float(kendalltau(mu, fit_human_only_btl(N, human_pairs(hum_te))["s_H"]).statistic), method="spectest")]
@@ -494,11 +502,11 @@ def run_planner(job):
     From a pilot human sample of size n_pilot and the LLM consensus mu-hat, the
     likelihood-ratio statistic T of `calibration_restriction_test` estimates the
     anchor misspecification as Delta-hat = max(0, (T - df) / (2 n_pilot)) (first
-    order: E[T] = df + 2 n_0 Delta_W under a local departure). The predicted
+    order: E[T] = df + 2 n_H Delta_W under a local departure). The predicted
     excess risks are Delta-hat + (r+1)/(2 n) for the anchored estimator and
     (N-1)/(2 n) for human-only, and the crossover is n* = (N-r-2)/(2 Delta-hat).
     The same record split and pilot draw as the `budget` sweep are used, so the
-    pilot equals that sweep's calibration sample at n_0 = n_pilot.
+    pilot equals that sweep's calibration sample at n_H = n_pilot.
     """
     _, dataset, n_pilot, seed, cfg = job
     dcfg = cfg[dataset]
@@ -518,11 +526,11 @@ def run_planner(job):
     t_pilot = calibration_restriction_test(N, human_pairs(pilot), mu)
     t_all = calibration_restriction_test(N, human_pairs(hum_train), mu)
     n_p, n_all = int(len(pilot)), int(len(hum_train))
-    return [dict(dataset=dataset, sweep="planner", panel="all", kind="none", level=float(n_pilot), n_0_level=-1, n_0=n_p, seed=int(seed), N=N, K=K, r=0,
+    return [dict(dataset=dataset, sweep="planner", panel="all", kind="none", level=float(n_pilot), n_H_level=-1, n_H=n_p, seed=int(seed), N=N, K=K, r=0,
                  n_L=int(len(llm)), n_test=int(len(hum_test)), n_train_human=n_all, floor=floor, method="planner",
-                 stat=t_pilot["stat"], df=t_pilot["df"], pvalue=t_pilot["pvalue"], human_only_exists=t_pilot["human_only_exists"],
+                 stat=t_pilot["stat"], df=t_pilot["df"], pvalue=t_pilot["pvalue"], human_only_exists=t_pilot["human_only_exists"], s_full_method=t_pilot["s_full_method"],
                  delta_hat=max(0.0, (t_pilot["stat"] - t_pilot["df"]) / (2.0 * n_p)),
-                 delta_all=max(0.0, (t_all["stat"] - t_all["df"]) / (2.0 * n_all)), stat_all=t_all["stat"], exists_all=t_all["human_only_exists"],
+                 delta_all=max(0.0, (t_all["stat"] - t_all["df"]) / (2.0 * n_all)), stat_all=t_all["stat"], exists_all=t_all["human_only_exists"], s_full_method_all=t_all["s_full_method"],
                  excess_anchor_pilot=heldout_log_loss(t_pilot["s_restricted"], test_recs) - floor,
                  excess_human_pilot=heldout_log_loss(t_pilot["s_full"], test_recs) - floor,
                  excess_anchor_all=heldout_log_loss(t_all["s_restricted"], test_recs) - floor,
@@ -535,7 +543,7 @@ def jobs_for(sweep, cfg, seeds, smoke=False):
     jobs = []
     if sweep == "spectest":
         levels = sw["levels"][:2] if smoke else sw["levels"]
-        return [(s, n0, seed, cfg) for s in sw["settings"] for n0 in levels for seed in seeds]
+        return [(s, nH, seed, cfg) for s in sw["settings"] for nH in levels for seed in seeds]
     if sweep == "planner":
         return [("planner", d, n_p, seed, cfg) for d in sw["datasets"] for n_p in (sw["levels"][d][:1] if smoke else sw["levels"][d]) for seed in seeds]
     for d in sw["datasets"]:
@@ -547,7 +555,7 @@ def jobs_for(sweep, cfg, seeds, smoke=False):
             elif sweep == "llm_budget":
                 levels = per_dataset(sw["levels"], d)
                 levels = levels[:2] if smoke else levels
-                jobs += [(d, sweep, p, "none", lv, n0, s, cfg) for lv in levels for n0 in per_dataset(sw["n_0_grid"], d) for s in seeds]
+                jobs += [(d, sweep, p, "none", lv, nH, s, cfg) for lv in levels for nH in per_dataset(sw["n_H_grid"], d) for s in seeds]
             elif sweep in ("noise", "noise_scarce"):
                 kinds = sw["kinds"][:1] if smoke else sw["kinds"]
                 levels = sw["levels"][:2] if smoke else sw["levels"]
@@ -564,8 +572,8 @@ def job_key(job):
         return ("planner", "all", "none", float(job[2]), -1, int(job[3]))
     if len(job) == 4:  # spectest
         return ("spectest", "all", job[0], float(job[1]), -1, int(job[2]))
-    d, sweep, p, kind, lv, n0, s, _ = job
-    return (sweep, p, kind, float(lv), int(n0) if n0 is not None else -1, int(s))
+    d, sweep, p, kind, lv, nH, s, _ = job
+    return (sweep, p, kind, float(lv), int(nH) if nH is not None else -1, int(s))
 
 
 def existing_keys(path, only=None):
@@ -575,7 +583,7 @@ def existing_keys(path, only=None):
         with open(path) as f:
             for line in f:
                 d = json.loads(line)
-                key = (d["sweep"], d["panel"], d["kind"], float(d["level"]), int(d.get("n_0_level", -1)), int(d["seed"]))
+                key = (d["sweep"], d["panel"], d["kind"], float(d["level"]), int(d.get("n_H_level", d.get("n_0_level", -1))), int(d["seed"]))
                 if only is None:
                     keys.add(key)
                 else:
@@ -640,7 +648,7 @@ def main(argv=None):
         return j[0] if len(j) == 8 else (j[1] if len(j) == 5 else "arena_33k")
 
     jobs = [j for j in jobs if job_key(j) not in done[_dataset_of(j)]]
-    print(f"{len(jobs)} cells to run -> {root}", flush=True)
+    print(f"{len(jobs)} cells to run -> {_display_path(root)}", flush=True)
     t0 = time.perf_counter()
     handles = {d: open(path, "a") for d, path in files.items()}
     try:

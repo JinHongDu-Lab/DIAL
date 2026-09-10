@@ -7,9 +7,9 @@ Inference and population-risk utilities for DIAL.
   BTL estimator (the lambda = 0 endpoint).
 - joint_sandwich: the fixed-lambda sandwich covariance of Thm.
   weighted-asymptotic-normality for the joint DIAL estimator,
-      Cov(zeta_hat) ~= H_lambda^{-1} J_{lambda,tau} H_lambda^{-1} / n_0,
-      H_lambda = Hessian of q_lambda = ell_H / n_0 + lambda ell_L / n_L,
-      J = V_0 + lambda^2 (n_0 / n_L) V_L,
+      Cov(zeta_hat) ~= H_lambda^{-1} J_{lambda,tau} H_lambda^{-1} / n_H,
+      H_lambda = Hessian of q_lambda = ell_H / n_H + lambda ell_L / n_L,
+      J = V_0 + lambda^2 (n_H / n_L) V_L,
   with V_0, V_L the centered per-observation score covariances of the human and
   LLM likelihood contributions, computed in the centering-reduced factor chart
   used by gacv.py. Covariances of s_cal, S, and b follow by the delta method.
@@ -82,16 +82,29 @@ def contrast_intervals(s, cov_s, alpha=0.05):
 # Human-only endpoint
 # ---------------------------------------------------------------------------
 
-def human_only_uq(N, human_pairs, s_hat, alpha=0.05, rcond=1e-10):
-    """Fisher-information covariance of the centered human-only BTL estimator."""
+def comparison_laplacian(N, human_pairs, s, normalize=True):
+    """Empirical comparison Laplacian \\eqref{eq:comparison-laplacian} at plug-in score `s`.
+
+    sum_{(i,j)} w_ij p_ij(1-p_ij) (e_i-e_j)(e_i-e_j)^T, w_ij the pair count.
+    With normalize=True (default) divides by n_H = sum(w_ij), giving the per-observation
+    average that matches the O(1) scale of H_lambda = Hessian of q_lambda = ell_H/n_H + ...;
+    with normalize=False returns the raw (n_H x) Fisher information used by human_only_uq.
+    """
     i_idx, j_idx, n_arr, _ = pairs_to_arrays(human_pairs)
-    s_hat = np.asarray(s_hat, dtype=float)
-    p = expit(s_hat[i_idx] - s_hat[j_idx])
+    s = np.asarray(s, dtype=float)
+    p = expit(s[i_idx] - s[j_idx])
     w = n_arr * p * (1.0 - p)
     X = np.zeros((i_idx.size, N))
     X[np.arange(i_idx.size), i_idx] = 1.0
     X[np.arange(i_idx.size), j_idx] = -1.0
     info = X.T @ (X * w[:, None])
+    return info / n_arr.sum() if normalize else info
+
+
+def human_only_uq(N, human_pairs, s_hat, alpha=0.05, rcond=1e-10):
+    """Fisher-information covariance of the centered human-only BTL estimator."""
+    s_hat = np.asarray(s_hat, dtype=float)
+    info = comparison_laplacian(N, human_pairs, s_hat, normalize=False)
     B = make_centering_basis(N)
     cov_s = B @ np.linalg.pinv(B.T @ info @ B, rcond=rcond) @ B.T
     return {"s_H": s_hat, "covariance": cov_s, "contrasts": contrast_intervals(s_hat, cov_s, alpha)}
@@ -229,13 +242,13 @@ def joint_sandwich(
     judge_basis = make_centering_basis(K)
     item_basis = make_centering_basis(N)
     pair_arrays = pairs_to_arrays(human_pairs)
-    n_0 = float(pair_arrays[2].sum())
+    n_H = float(pair_arrays[2].sum())
     n_L = total_llm_n(n_ijk, n_order=n_order)
     lam = float(fit["lam"])
     zeta = pack_reduced(fit["gamma"], fit["mu"], fit["U"], fit["V"], fit["b"], fit["alpha_H"], fit["a"], use_order)
 
     def grad_fn(z):
-        return q_lambda_grad(z, N, K, r, judge_basis, item_basis, use_order, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_0, n_L)
+        return q_lambda_grad(z, N, K, r, judge_basis, item_basis, use_order, n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_H, n_L)
 
     H = hessian_from_grad(grad_fn, zeta, eps=hess_eps)
 
@@ -244,14 +257,14 @@ def joint_sandwich(
     i_obs, j_obs, z_obs = observations_from_pairs(human_pairs)
     g_t = human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i_obs, j_obs, z_obs)
     g_bar = g_t.mean(axis=0)
-    V0 = (g_t - g_bar).T @ (g_t - g_bar) / n_0
+    V0 = (g_t - g_bar).T @ (g_t - g_bar) / n_H
     if llm_variation:
         VL, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, cluster=cluster)
-        J = V0 + lam ** 2 * (n_0 / n_L) * VL
+        J = V0 + lam ** 2 * (n_H / n_L) * VL
     else:
         J = V0
     H_inv = np.linalg.pinv(H, rcond=rcond)
-    cov_zeta = H_inv @ J @ H_inv / n_0
+    cov_zeta = H_inv @ J @ H_inv / n_H
 
     Jac = _target_jacobian(zeta, N, K, r, judge_basis, item_basis, use_order)
     cov_targets = Jac @ cov_zeta @ Jac.T
@@ -267,6 +280,7 @@ def joint_sandwich(
     return {
         "cov_zeta": cov_zeta,
         "hessian": H,
+        "dot_s0": Jac[:N, :],
         "score_cov": J,
         "cov_s": cov_s,
         "cov_S": cov_S,
@@ -274,27 +288,134 @@ def joint_sandwich(
         "contrasts": contrast_intervals(fit["s_H"], cov_s, alpha),
         "b": {"estimate": b, "se": se_b, "lower": b - z * se_b, "upper": b + z * se_b},
         "S": {"estimate": S_hat, "se": se_S, "lower": S_hat - z * se_S, "upper": S_hat + z * se_S},
-        "n_0": n_0,
+        "n_H": n_H,
         "n_L": n_L,
         "lam": lam,
     }
 
 
-def calibration_restriction_test(N, human_pairs, W, maxiter=1000):
+# ---------------------------------------------------------------------------
+# Interval validity under local misalignment (prop:local-misalignment)
+# ---------------------------------------------------------------------------
+
+def bias_projection_operator(dot_s0, H, L, rcond=1e-9):
+    """A_lambda := dot_s0 H_lambda^{-1} dot_s0^T L (main.tex eq. around line 2778).
+
+    L-self-adjoint (w.r.t. <x,y>_L = x^T L y), eigenvalues in [0,1] nonincreasing in
+    lambda, A_lambda h = h for h in col(W), and A_lambda -> P^L_W as lambda -> infty
+    (validated numerically in tests, not asserted here).
+    """
+    H_inv = np.linalg.pinv(np.asarray(H, dtype=float), rcond=rcond)
+    return dot_s0 @ H_inv @ dot_s0.T @ np.asarray(L, dtype=float)
+
+
+def bias_sensitivity(D, A_lambda, L, rcond=1e-9):
+    """kappa(d, lambda) := {d^T (I-A_lambda) L^+ (I-A_lambda)^T d}^{1/2} for each row d of D.
+
+    D defaults to the pairwise-contrast matrix elsewhere in this module; any set of
+    contrasts with D @ ones(N) = 0 is valid.
+    """
+    D = np.asarray(D, dtype=float)
+    N = A_lambda.shape[0]
+    M = np.eye(N) - A_lambda
+    L_pinv = np.linalg.pinv(np.asarray(L, dtype=float), rcond=rcond)
+    Dt = D @ M
+    quad = np.einsum("pi,ij,pj->p", Dt, L_pinv, Dt)
+    return np.sqrt(np.maximum(quad, 0.0))
+
+
+def noncentrality_interval(T, df, level=0.90):
+    """Two-sided confidence interval for the noncentrality of a chi-square(df) from one observation T.
+
+    The lower end is the largest noncentrality whose upper tail beyond T has mass at most
+    (1 - level)/2 (zero when T is below the corresponding central quantile); the upper end
+    is the smallest noncentrality whose lower tail below T has mass at most (1 - level)/2.
+    Dividing both ends by 2 n_H gives the interval for Delta_W under the first-order
+    approximation E[T] = df + 2 n_H Delta_W of app:calibration-test (also the delta_W of the
+    "Interval validity under local misalignment" widening, since delta_W = n_human Delta_W and
+    the n_human factors cancel against the widening formula's own 1/sqrt(n_human): see
+    misalignment_widened_contrasts).
+    """
+    from scipy.optimize import brentq
+    from scipy.stats import ncx2
+
+    a = (1.0 - level) / 2.0
+    f_lo = lambda l: ncx2.sf(T, df, l) - a
+    if f_lo(0.0) >= 0:
+        lo = 0.0
+    else:
+        b = 10.0
+        while f_lo(b) < 0:
+            b *= 2
+        lo = brentq(f_lo, 0.0, b)
+    f_hi = lambda l: ncx2.cdf(T, df, l) - a
+    if f_hi(0.0) <= 0:
+        hi = 0.0
+    else:
+        b = 10.0
+        while f_hi(b) > 0:
+            b *= 2
+        hi = brentq(f_hi, 0.0, b)
+    return lo, hi
+
+
+def misalignment_widened_contrasts(sw, N, human_pairs, s_full, delta_hi, alpha=0.05, rcond=1e-9, D=None):
+    """Widen the pairwise-contrast intervals of `sw = joint_sandwich(...)` for asymptotic
+    coverage under local misalignment (main.tex, "Interval validity under local
+    misalignment", lines ~2883-2888).
+
+    `s_full` is a consistent human-only estimate of s_human (e.g. `calibration_restriction_test`'s
+    "s_full"), used only to plug into the empirical comparison Laplacian L.
+    `delta_hi` is the upper end of a confidence interval for Delta_W at the pilot used to fit
+    `sw` (e.g. `robustness_plot.noncentrality_interval`'s / `planner_with_intervals`'s
+    delta_hi column), standing in for the confidence upper bound on delta_W = n_human * Delta_W
+    per app:calibration-test; the n_human factor cancels against the widening formula's own
+    1/sqrt(n_human), so the widening below is kappa(d,lambda) * sqrt(2 * delta_hi) exactly,
+    with no separate n_human term.
+
+    Returns the original contrasts plus "kappa", "widening", "lower_widened", "upper_widened",
+    and the bias operator "A_lambda" for diagnostics.
+    """
+    if D is None:
+        D = pairwise_contrast_matrix(N)
+    L = comparison_laplacian(N, human_pairs, s_full, normalize=True)
+    A_lambda = bias_projection_operator(sw["dot_s0"], sw["hessian"], L, rcond=rcond)
+    kappa = bias_sensitivity(D, A_lambda, L, rcond=rcond)
+    widening = kappa * np.sqrt(2.0 * max(delta_hi, 0.0))
+    base = sw["contrasts"]
+    return {
+        "estimate": base["estimate"],
+        "se": base["se"],
+        "lower": base["lower"],
+        "upper": base["upper"],
+        "kappa": kappa,
+        "widening": widening,
+        "lower_widened": base["lower"] - widening,
+        "upper_widened": base["upper"] + widening,
+        "A_lambda": A_lambda,
+        "L": L,
+    }
+
+
+def calibration_restriction_test(N, human_pairs, W, maxiter=1000, firth_fallback=True):
     """Likelihood-ratio test of the calibration restriction s_0 = W c against the unrestricted centered BTL.
 
     Statistic 2 { L_H(c-hat; W) - L_H^full(s-hat_0) } with L_H the total human negative
     log-likelihood, compared with chi-square on (N - 1) - d degrees of freedom, d = W.shape[1]
-    (manuscript app:spec-test; W treated as known, i.e. the n_0 / n_L -> 0 regime).
+    (manuscript app:spec-test; W treated as known, i.e. the n_H / n_L -> 0 regime).
     Returns the statistic, degrees of freedom, p-value, both fitted scores, and whether the
-    unrestricted MLE exists (`btl_mle_exists`); when it does not, the unrestricted fit is a
-    separated maximizer and the statistic is inflated.
+    unrestricted MLE exists (`btl_mle_exists`).
+
+    When it does not (Ford 1957 separation) and `firth_fallback` is set, `s_full` is instead the
+    Firth (1993) bias-reduced fit (`hja.fit_centered_btl_firth`, app:subsubsec:planner item 4),
+    which is always finite, and `s_full_method` records which fit was used ("mle" or "firth")
+    instead of silently returning the inflated statistic of a separated maximizer as before.
     """
     from scipy.stats import chi2
 
     from .dial_model import fit_human_calibration
     from .gacv import btl_mle_exists
-    from .hja import centered_btl_loss_and_grad_from_pairs, fit_centered_btl_from_pairs
+    from .hja import centered_btl_loss_and_grad_from_pairs, fit_centered_btl_firth, fit_centered_btl_from_pairs
 
     W = np.asarray(W, dtype=float)
     if W.ndim == 1:
@@ -303,10 +424,16 @@ def calibration_restriction_test(N, human_pairs, W, maxiter=1000):
     alpha, a = fit_human_calibration(W[:, 0], W[:, 1:], human_pairs, maxiter=maxiter)
     s_restricted = W @ np.concatenate([[alpha], a])
     exists = btl_mle_exists(N, human_pairs)
-    s_full = fit_centered_btl_from_pairs(N, human_pairs, maxiter=maxiter)
+    if exists or not firth_fallback:
+        s_full = fit_centered_btl_from_pairs(N, human_pairs, maxiter=maxiter)
+        s_full_method = "mle"
+    else:
+        s_full = fit_centered_btl_firth(N, human_pairs, maxiter=maxiter)
+        s_full_method = "firth"
     nll_r = centered_btl_loss_and_grad_from_pairs(N, human_pairs, s_restricted)[0]
     nll_u = centered_btl_loss_and_grad_from_pairs(N, human_pairs, s_full)[0]
     stat = max(0.0, 2.0 * (nll_r - nll_u))
     df = (N - 1) - d
     return {"stat": float(stat), "df": int(df), "pvalue": float(chi2.sf(stat, df)) if df > 0 else float("nan"),
-            "s_restricted": s_restricted, "s_full": s_full, "human_only_exists": bool(exists), "coefficients": np.concatenate([[alpha], a])}
+            "s_restricted": s_restricted, "s_full": s_full, "human_only_exists": bool(exists), "s_full_method": s_full_method,
+            "coefficients": np.concatenate([[alpha], a])}
