@@ -205,6 +205,44 @@ def _save(fig, out, name):
     return out / f'{name}.pdf'
 
 
+FIGURES = {
+    # name -> everything panel_grid needs except the metric, so the CLI and the notebook cannot
+    # drift apart: both ask figure_kwargs for the spec rather than spelling the arguments out.
+    'fig_small_panel': dict(
+        source='budget',
+        # n_H is this sweep's x axis, so the row label names the LLM side instead
+        row=lambda ds: f'{DATASET_LABEL[ds]}, all LLM data',
+        x_column='n_H', xlabel=r'human calibration labels $n_{\mathrm{H}}$'),
+    'fig_small_panel_llmbudget': dict(
+        source='llm_budget',
+        row=lambda ds: f'{DATASET_LABEL[ds]}, $n_H={NH[ds]}$',
+        x_column='level', xlabel=r'LLM comparisons $n_{\mathrm{L}}$',
+        flat=('human_only',), xticks=False),
+    'fig_intermediate_budget': dict(
+        source='intermediate',
+        row=lambda ds: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$',
+        x_column='n_H', xlabel=r'human calibration labels $n_{\mathrm{H}}$'),
+}
+
+
+def figure_kwargs(name, metric):
+    """panel_grid keyword arguments for one figure and metric (the single source of truth)."""
+    spec = {k: v for k, v in FIGURES[name].items() if k not in ('source', 'row')}
+    label, row = METRIC[metric]['label'], FIGURES[name]['row']
+    return dict(metric=metric, methods=METHODS, ylabel=lambda ds: f'{row(ds)}\n{label}', **spec)
+
+
+def figure_name(name, metric):
+    """File name for one figure and metric; Kendall's tau takes a `_tau` suffix."""
+    return name + ('' if metric == 'excess' else '_tau')
+
+
+def figure_rows(name, summary=None, intermediate=None):
+    """The frame `name` is drawn from, selected out of the two loaders' output."""
+    source = FIGURES[name]['source']
+    return intermediate if source == 'intermediate' else summary[summary.sweep == source]
+
+
 def make_figures(which=('small', 'llm', 'intermediate'),
                  intermediate_root=ROOT / 'results' / 'intermediate_budget',
                  out=ROOT / 'figures',
@@ -213,40 +251,23 @@ def make_figures(which=('small', 'llm', 'intermediate'),
 
     Each figure is drawn once per metric; the Kendall-tau versions take a `_tau` suffix.
     """
+    names = {'small': 'fig_small_panel', 'llm': 'fig_small_panel_llmbudget',
+             'intermediate': 'fig_intermediate_budget'}
+    wanted = [names[w] for w in which]
+    summary = intermediate = None
     drawn = {}
-
-    def draw(rows, name, metric, **kwargs):
-        name += '' if metric == 'excess' else '_tau'
-        _save(panel_grid(rows, metric=metric, **kwargs), out, name)
-        drawn[name] = rows
-
     with plt.rc_context(RCPARAMS):
-        if {'small', 'llm'} & set(which):
+        if any(FIGURES[n]['source'] != 'intermediate' for n in wanted):
             summary = panel_budget_data()
             Path(out).mkdir(parents=True, exist_ok=True)
             summary.to_csv(Path(out) / 'panel_budget_plot_data.csv', index=False)
+        if any(FIGURES[n]['source'] == 'intermediate' for n in wanted):
+            intermediate, _ = intermediate_data(intermediate_root)
+        for name in wanted:
+            rows = figure_rows(name, summary, intermediate)
             for metric in metrics:
-                label = METRIC[metric]['label']
-                if 'small' in which:
-                    # n_H is this sweep's x axis, so the row label names the LLM side instead
-                    draw(summary[summary.sweep == 'budget'], 'fig_small_panel', metric,
-                         x_column='n_H', ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, all LLM data\n{_l}',
-                         xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS)
-                if 'llm' in which:
-                    # the fixed budget goes in the row label, as in the intermediate figure
-                    draw(summary[summary.sweep == 'llm_budget'], 'fig_small_panel_llmbudget', metric,
-                         x_column='level',
-                         ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, $n_H={NH[ds]}$\n{_l}',
-                         xlabel=r'LLM comparisons $n_{\mathrm{L}}$', methods=METHODS, flat=('human_only',),
-                         xticks=False)
-        if 'intermediate' in which:
-            rows, seeds = intermediate_data(intermediate_root)
-            for metric in metrics:
-                label = METRIC[metric]['label']
-                draw(rows, 'fig_intermediate_budget', metric,
-                     x_column='n_H',
-                     ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$\n{_l}',
-                     xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS)
+                _save(panel_grid(rows, **figure_kwargs(name, metric)), out, figure_name(name, metric))
+                drawn[figure_name(name, metric)] = rows
     return drawn
 
 
