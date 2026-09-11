@@ -7,11 +7,10 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from experiments.simulation import human_preference, position_bias
+from experiments.simulation import human_preference
 
 
 STUDIES = {
-    position_bias.STUDY_NAME: position_bias,
     human_preference.STUDY_NAME: human_preference,
 }
 

@@ -64,7 +64,7 @@ conda activate llm
 pytest -m 'not slow'
 pytest
 python run_simulation.py --list-studies
-python run_simulation.py --study position_bias --smoke
+python run_simulation.py --study human_preference --smoke
 python run_real_data.py --list-studies
 ```
 
