@@ -38,41 +38,44 @@ def default_lambda_grid(n_L, n_H, n_points=7):
 
 
 def observations_from_records(records):
-    i_idx, j_idx, z = [], [], []
-    for rec in records:
-        if len(rec) >= 4:
-            _k, i, j, y = rec[0], rec[1], rec[2], rec[3]
-        else:
-            i, j, y = rec[0], rec[1], rec[2]
-        i_idx.append(int(i))
-        j_idx.append(int(j))
-        z.append(float(y))
-    if not i_idx:
+    """Unpack (k, i, j, y) or (i, j, y) records into index and outcome arrays."""
+    if len(records) == 0:
         raise ValueError("no human observations supplied")
-    return np.asarray(i_idx, dtype=int), np.asarray(j_idx, dtype=int), np.asarray(z, dtype=float)
+    arr = np.asarray(records, dtype=float)
+    arr = arr[:, 1:4] if arr.shape[1] >= 4 else arr[:, :3]
+    return arr[:, 0].astype(int), arr[:, 1].astype(int), arr[:, 2]
 
 
 def observations_from_pairs(pairs):
-    i_idx, j_idx, z = [], [], []
-    for i, j, n, y in pairs:
-        n_win = float(y)
-        n_loss = float(n) - float(y)
-        n_win_i = int(round(n_win))
-        n_loss_i = int(round(n_loss))
-        if abs(n_win - n_win_i) < 1e-8 and abs(n_loss - n_loss_i) < 1e-8:
-            i_idx.extend([int(i)] * n_win_i)
-            j_idx.extend([int(j)] * n_win_i)
-            z.extend([1.0] * n_win_i)
-            i_idx.extend([int(i)] * n_loss_i)
-            j_idx.extend([int(j)] * n_loss_i)
-            z.extend([0.0] * n_loss_i)
-        else:
-            i_idx.append(int(i))
-            j_idx.append(int(j))
-            z.append(float(y) / float(n) if n else 0.5)
-    if not i_idx:
+    """Expand aggregated (i, j, n, y) pairs into one row per Bernoulli observation.
+
+    A pair with integral win and loss counts becomes that many 1s followed by that many 0s;
+    a fractional pair (a tie kept as y = 0.5, say) stays one row carrying the mean outcome.
+    """
+    arr = np.asarray(pairs, dtype=float).reshape(-1, 4)
+    if arr.shape[0] == 0:
         raise ValueError("no human observations supplied")
-    return np.asarray(i_idx, dtype=int), np.asarray(j_idx, dtype=int), np.asarray(z, dtype=float)
+    i, j, n, y = arr[:, 0].astype(int), arr[:, 1].astype(int), arr[:, 2], arr[:, 3]
+    n_win, n_loss = np.rint(y), np.rint(n - y)
+    integral = (np.abs(y - n_win) < 1e-8) & (np.abs((n - y) - n_loss) < 1e-8)
+
+    # integral pairs: n_win ones then n_loss zeros, pair by pair
+    counts = np.where(integral, n_win + n_loss, 0).astype(int)
+    rep = np.repeat(np.arange(arr.shape[0]), counts)
+    within = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
+    z_int = (within < np.repeat(n_win.astype(int), counts)).astype(float)
+
+    frac = np.flatnonzero(~integral)
+    z_frac = np.divide(y[frac], n[frac], out=np.full(frac.size, 0.5), where=n[frac] != 0)
+
+    # keep the original pair order: integral expansions and fractional rows interleave by pair
+    order = np.argsort(np.concatenate([rep, frac]), kind="stable")
+    i_all = np.concatenate([i[rep], i[frac]])[order]
+    j_all = np.concatenate([j[rep], j[frac]])[order]
+    z_all = np.concatenate([z_int, z_frac])[order]
+    if i_all.size == 0:
+        raise ValueError("no human observations supplied")
+    return i_all, j_all, z_all
 
 
 def pack_reduced(gamma, mu, U, V, b, alpha, a, use_order):
@@ -288,17 +291,14 @@ def btl_mle_exists(N, pairs):
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
 
-    rows, cols = [], []
-    for i, j, n, y in pairs:
-        if y > 0:
-            rows.append(int(i))
-            cols.append(int(j))
-        if n - y > 0:
-            rows.append(int(j))
-            cols.append(int(i))
-    if not rows:
+    arr = np.asarray(pairs, dtype=float).reshape(-1, 4)
+    i, j, n, y = arr[:, 0].astype(int), arr[:, 1].astype(int), arr[:, 2], arr[:, 3]
+    win, loss = y > 0, (n - y) > 0
+    rows = np.concatenate([i[win], j[loss]])
+    cols = np.concatenate([j[win], i[loss]])
+    if rows.size == 0:
         return False
-    graph = coo_matrix((np.ones(len(rows)), (rows, cols)), shape=(N, N))
+    graph = coo_matrix((np.ones(rows.size), (rows, cols)), shape=(N, N))
     n_components, _ = connected_components(graph, directed=True, connection="strong")
     return bool(n_components == 1)
 

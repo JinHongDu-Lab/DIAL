@@ -188,27 +188,19 @@ def accept_block_step(result, f0, label):
 
 
 def aggregate_judge_pairs(n_ijk, y_ijk, judge_index=None):
+    """Observed (i, j, n, y) pairs, summed over judges or taken from `judge_index` alone."""
     K, N, _ = n_ijk.shape
-    pairs = []
     if judge_index is None:
-        for i in range(N):
-            for j in range(i + 1, N):
-                n = float(np.sum(n_ijk[:, i, j]))
-                if n <= 0:
-                    continue
-                y = float(np.sum(y_ijk[:, i, j]))
-                pairs.append((i, j, n, y))
+        n_ij, y_ij = np.sum(n_ijk, axis=0), np.sum(y_ijk, axis=0)
     else:
-        for i in range(N):
-            for j in range(i + 1, N):
-                n = float(n_ijk[judge_index, i, j])
-                if n <= 0:
-                    continue
-                y = float(y_ijk[judge_index, i, j])
-                pairs.append((i, j, n, y))
-    if not pairs:
+        n_ij, y_ij = n_ijk[judge_index], y_ijk[judge_index]
+    tri_i, tri_j = np.triu_indices(N, k=1)
+    n, y = n_ij[tri_i, tri_j], y_ij[tri_i, tri_j]
+    keep = n > 0
+    if not np.any(keep):
         raise ValueError("no observed pairs available for BTL fit")
-    return pairs
+    return [(int(i), int(j), float(nn), float(yy))
+            for i, j, nn, yy in zip(tri_i[keep], tri_j[keep], n[keep], y[keep])]
 
 
 def _pairs_arrays(pairs):
@@ -287,7 +279,7 @@ def fit_centered_btl_firth(N, pairs, initial=None, maxiter=500):
     over the zero-sum subspace. Firth's penalty makes the objective finite everywhere and gives
     a unique interior minimizer even under Ford (1957) separation, where
     `fit_centered_btl_from_pairs` diverges; used as the existence fallback in
-    `calibration_restriction_test` (app:subsubsec:planner item 4). This is a standard
+    `calibration_restriction_test`. This is a standard
     bias-reduction heuristic (bias O(1/n) versus the plain MLE's O(1/sqrt(n)), Firth 1993); using
     it specifically to replace a non-existent MLE is outside what that asymptotic argument covers
     and is validated empirically rather than proved (see the manuscript remark).

@@ -203,12 +203,10 @@ def _target_jacobian(zeta, N, K, r, judge_basis, item_basis, use_order, eps=1e-6
         return np.concatenate([s, S.ravel(), b])
 
     base = targets(zeta)
-    J = np.zeros((base.size, zeta.size))
-    for d in range(zeta.size):
-        e = np.zeros(zeta.size)
-        e[d] = eps
-        J[:, d] = (targets(zeta + e) - targets(zeta - e)) / (2.0 * eps)
-    return J
+    steps = eps * np.eye(zeta.size)
+    plus = np.column_stack([targets(zeta + e) for e in steps])
+    minus = np.column_stack([targets(zeta - e) for e in steps])
+    return (plus - minus) / (2.0 * eps)
 
 
 def joint_sandwich(
@@ -367,8 +365,7 @@ def misalignment_widened_contrasts(sw, N, human_pairs, s_full, delta_hi, alpha=0
     `s_full` is a consistent human-only estimate of s_human (e.g. `calibration_restriction_test`'s
     "s_full"), used only to plug into the empirical comparison Laplacian L.
     `delta_hi` is the upper end of a confidence interval for Delta_W at the pilot used to fit
-    `sw` (e.g. `robustness_plot.noncentrality_interval`'s / `planner_with_intervals`'s
-    delta_hi column), standing in for the confidence upper bound on delta_W = n_human * Delta_W
+    `sw` (e.g. the upper end of `noncentrality_interval` divided by 2 n_human), standing in for the confidence upper bound on delta_W = n_human * Delta_W
     per app:calibration-test; the n_human factor cancels against the widening formula's own
     1/sqrt(n_human), so the widening below is kappa(d,lambda) * sqrt(2 * delta_hi) exactly,
     with no separate n_human term.
@@ -407,7 +404,7 @@ def calibration_restriction_test(N, human_pairs, W, maxiter=1000, firth_fallback
     unrestricted MLE exists (`btl_mle_exists`).
 
     When it does not (Ford 1957 separation) and `firth_fallback` is set, `s_full` is instead the
-    Firth (1993) bias-reduced fit (`hja.fit_centered_btl_firth`, app:subsubsec:planner item 4),
+    Firth (1993) bias-reduced fit (`hja.fit_centered_btl_firth`),
     which is always finite, and `s_full_method` records which fit was used ("mle" or "firth")
     instead of silently returning the inflated statistic of a separated maximizer as before.
     """

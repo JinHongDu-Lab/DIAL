@@ -134,28 +134,24 @@ def generate_balanced_comparisons(S, total_comparisons, random_seed=42, b=None):
     base_per_cell = total_comparisons // n_cells
     remainder = total_comparisons % n_cells
     rng = np.random.default_rng(random_seed)
-    comparisons = []
-    extra_cell_indices = set(rng.choice(n_cells, size=remainder, replace=False).tolist()) if remainder > 0 else set()
+    extra_cell_indices = rng.choice(n_cells, size=remainder, replace=False) if remainder > 0 else np.empty(0, dtype=int)
     b = np.zeros(K, dtype=float) if b is None else np.asarray(b, dtype=float)
 
-    cell_idx = 0
-    order_values = (-1.0, 1.0) if use_order else (0.0,)
-    for k in range(K):
-        for i in range(N):
-            for j in range(i + 1, N):
-                for a in order_values:
-                    eta = S[k, i] - S[k, j] + a * b[k]
-                    prob = _logistic(eta)
-                    cell_count = base_per_cell + int(cell_idx in extra_cell_indices)
-                    if cell_count > 0:
-                        draws = rng.binomial(1, prob, size=cell_count)
-                        if use_order:
-                            comparisons.extend((k, i, j, int(y), int(a)) for y in draws)
-                        else:
-                            comparisons.extend((k, i, j, int(y)) for y in draws)
-                    cell_idx += 1
+    # cells enumerate (k, i < j, a) in that order; counts differ only by the +1 of the remainder
+    order_values = np.array([-1.0, 1.0]) if use_order else np.array([0.0])
+    tri_i, tri_j = np.triu_indices(N, k=1)
+    kk, pp, aa = (idx.ravel() for idx in np.meshgrid(np.arange(K), np.arange(n_pairs), np.arange(order_values.size), indexing="ij"))
+    i_cell, j_cell, a_cell = tri_i[pp], tri_j[pp], order_values[aa]
+    counts = np.full(n_cells, base_per_cell, dtype=int)
+    counts[extra_cell_indices] += 1
 
-    return comparisons
+    eta = S[kk, i_cell] - S[kk, j_cell] + a_cell * b[kk]
+    rep = np.repeat(np.arange(n_cells), counts)
+    draws = rng.binomial(1, _logistic(eta[rep]))
+    k_obs, i_obs, j_obs, a_obs = kk[rep], i_cell[rep], j_cell[rep], a_cell[rep].astype(int)
+    if use_order:
+        return [(int(k_), int(i_), int(j_), int(y_), int(a_)) for k_, i_, j_, y_, a_ in zip(k_obs, i_obs, j_obs, draws, a_obs)]
+    return [(int(k_), int(i_), int(j_), int(y_)) for k_, i_, j_, y_ in zip(k_obs, i_obs, j_obs, draws)]
 
 
 def generate_balanced_comparisons_with_order(S, b, total_comparisons, random_seed=42):
@@ -274,7 +270,7 @@ def generate_human_comparisons(s_H, total_comparisons, random_seed=42, pair_subs
     if total_comparisons <= 0:
         raise ValueError(f"total_comparisons must be positive, got {total_comparisons}")
 
-    pairs = pair_subset if pair_subset is not None else [(i, j) for i in range(N) for j in range(i + 1, N)]
+    pairs = pair_subset if pair_subset is not None else np.column_stack(np.triu_indices(N, k=1))
     n_pairs = len(pairs)
     if n_pairs == 0:
         raise ValueError("pair_subset must be non-empty")
@@ -282,13 +278,12 @@ def generate_human_comparisons(s_H, total_comparisons, random_seed=42, pair_subs
     base_per_cell = total_comparisons // n_pairs
     remainder = total_comparisons % n_pairs
     rng = np.random.default_rng(random_seed)
-    extra_indices = set(rng.choice(n_pairs, size=remainder, replace=False).tolist()) if remainder > 0 else set()
+    extra_indices = rng.choice(n_pairs, size=remainder, replace=False) if remainder > 0 else np.empty(0, dtype=int)
 
-    comparisons = []
-    for idx, (i, j) in enumerate(pairs):
-        prob = _logistic(s_H[i] - s_H[j])
-        cell_count = base_per_cell + int(idx in extra_indices)
-        if cell_count > 0:
-            draws = rng.binomial(1, prob, size=cell_count)
-            comparisons.extend((0, i, j, int(y)) for y in draws)
-    return comparisons
+    pair_arr = np.asarray(pairs, dtype=int).reshape(-1, 2)
+    counts = np.full(n_pairs, base_per_cell, dtype=int)
+    counts[extra_indices] += 1
+    rep = np.repeat(np.arange(n_pairs), counts)
+    i, j = pair_arr[rep, 0], pair_arr[rep, 1]
+    draws = rng.binomial(1, _logistic(s_H[i] - s_H[j]))
+    return [(0, int(i_), int(j_), int(y_)) for i_, j_, y_ in zip(i, j, draws)]
