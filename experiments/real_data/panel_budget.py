@@ -89,6 +89,25 @@ def panel_budget_data():
                                   n_H=('n_H', 'mean'), n_L=('n_L', 'mean'), n=('seed', 'size')).reset_index()
 
 
+def human_only_curve():
+    """Human-only excess and tau against the human budget, from the robustness `budget` sweep.
+
+    The human-only fit never touches the LLM sample, and both the record split and the
+    calibration draw key off [seed, dataset] and n_H alone, so this curve is the same in every
+    sweep and on every judge panel -- verified exactly against the llm_budget rows. That is why
+    the intermediate run, which fitted only the two calibrated estimators, can borrow it.
+    """
+    frames = []
+    for ds in NH:
+        raw = load(ds, ROOT)
+        raw = raw[(raw.sweep == 'budget') & (raw.method == 'human_only') & (~raw.failed) & (raw.seed < SEEDS)
+                  & (raw.panel == 'all')]
+        g = raw.groupby('level').agg(n_H=('n_H', 'mean'), excess=('excess', 'mean'), se=('excess', 'sem'),
+                                     tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem')).reset_index()
+        frames.append(g.assign(dataset=ds, method='human_only').rename(columns={'level': 'n_H_level'}))
+    return pd.concat(frames, ignore_index=True)
+
+
 def intermediate_data(root):
     """Rows behind the intermediate-LLM-budget figure, with the run's own completeness checks."""
     root = Path(root)
@@ -107,6 +126,11 @@ def intermediate_data(root):
         n_H=('n_H', 'mean'), excess=('excess', 'mean'), se=('excess', 'sem'),
         tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
         delta_vs_cons=('delta_vs_cons', 'mean'), paired_mcse=('delta_vs_cons', 'sem')).reset_index()
+
+    # the run fitted only the calibrated estimators, so add the panel-independent human reference
+    human = human_only_curve()
+    human = human[human.n_H_level.isin(summary.n_H_level.unique())]
+    summary = pd.concat([summary] + [human.assign(panel=p) for p in PANELS], ignore_index=True)
     return summary, seeds
 
 
@@ -141,7 +165,8 @@ def panel_grid(summary, x_column, ylabel, xlabel, methods, flat=(), titles=PANEL
                 if g.empty:
                     continue
                 if method in flat:
-                    ax.axhline(g[value].mean(), color=color, lw=1, label=label)
+                    # dash-dotted so the reference reads as a series rather than a grid line
+                    ax.axhline(g[value].mean(), color=color, lw=1.2, ls='-.', label=label)
                     continue
                 lw = 1.45 if method == 'dial_mu' else 1.05
                 ax.plot(g[x_column], g[value], color=color, ls=ls, marker=marker, ms=2.5, lw=lw, label=label)
@@ -221,7 +246,7 @@ def make_figures(which=('small', 'llm', 'intermediate'),
                 draw(rows, 'fig_intermediate_budget', metric,
                      x_column='n_H',
                      ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$\n{_l}',
-                     xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS[1:])
+                     xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS)
     return drawn
 
 
