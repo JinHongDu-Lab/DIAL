@@ -3,8 +3,11 @@
 One study, three figures, one 3 x 3 grid (datasets x judge panels) in all of them:
 
   fig_small_panel.pdf            human budget n_H sweep, as-collected LLM data
-  fig_small_panel_llmbudget.pdf  LLM budget n_L sweep at the fixed default n_H
-  fig_intermediate_budget.pdf    human budget sweep at a fixed intermediate n_L
+  fig_small_panel_llmbudget.pdf  LLM budget n_L sweep at a fixed n_H (300 / 80 / 60)
+  fig_intermediate_budget.pdf    human budget sweep at a fixed n_L (2000 / 160 / 100)
+
+All three share one layout -- judge panels as columns, datasets as rows, and each row labelled
+with whichever budget is held fixed -- plus a `_tau` companion in Kendall's tau.
 
 The first two read the 50-seed endpoint-margin run (`results/endpoint_margin_appendix`)
 together with the main robustness rows; the third reads an `intermediate_budget` run
@@ -37,7 +40,7 @@ from .robustness_plot import load
 
 PANELS = ['small6', 'large6', 'all']
 PANEL_TITLE = ['small6 (36.5B)', 'large6 (203B)', 'all, 21 judges (367.5B+, 3 paid APIs)']
-NH = {'arena_33k': 300, 'mt_bench': 80, 'pandalm': 60}          # default human budget per dataset
+NH = {'arena_33k': 300, 'mt_bench': 80, 'pandalm': 60}          # human budget held fixed in the LLM sweep
 INTERMEDIATE_NL = {'arena_33k': 2000, 'mt_bench': 160, 'pandalm': 100}
 XTICKS = {'arena_33k': [50, 200, 800, 3200], 'mt_bench': [20, 80, 320], 'pandalm': [20, 80, 320]}
 
@@ -208,14 +211,17 @@ def make_figures(which=('small', 'llm', 'intermediate'),
             for metric in metrics:
                 label = METRIC[metric]['label']
                 if 'small' in which:
+                    # n_H is this sweep's x axis, so the row label names the LLM side instead
                     draw(summary[summary.sweep == 'budget'], 'fig_small_panel', metric,
-                         x_column='n_H', ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}\n{_l}',
+                         x_column='n_H', ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, all LLM data\n{_l}',
                          xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS)
                 if 'llm' in which:
+                    # the fixed budget goes in the row label, as in the intermediate figure
                     draw(summary[summary.sweep == 'llm_budget'], 'fig_small_panel_llmbudget', metric,
-                         x_column='level', ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}\n{_l}',
+                         x_column='level',
+                         ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, $n_H={NH[ds]}$\n{_l}',
                          xlabel=r'LLM comparisons $n_{\mathrm{L}}$', methods=METHODS, flat=('human_only',),
-                         suptitle=r'Fixed human budget $n_{\mathrm{H}}=300\,/\,80\,/\,60$', xticks=False)
+                         xticks=False)
         if 'intermediate' in which:
             rows, seeds = intermediate_data(intermediate_root)
             for metric in metrics:
@@ -223,8 +229,7 @@ def make_figures(which=('small', 'llm', 'intermediate'),
                 draw(rows, 'fig_intermediate_budget', metric,
                      x_column='n_H',
                      ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$\n{_l}',
-                     xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS[1:],
-                     titles=PANELS, suptitle=f'Intermediate LLM budget: {seeds} matched seeds')
+                     xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS[1:])
     return drawn
 
 

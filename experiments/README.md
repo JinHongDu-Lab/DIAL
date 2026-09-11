@@ -152,7 +152,7 @@ panels `small6` / `large6` / `all`), from two runs that share the same 50 record
 | Figure | Sweep | Fixed | Source |
 |---|---|---|---|
 | `fig_small_panel[_tau].pdf` | human budget n_H | as-collected LLM data | `results/endpoint_margin_appendix` + robustness rows |
-| `fig_small_panel_llmbudget[_tau].pdf` | LLM budget n_L | n_H = 300 / 80 / 60 | same |
+| `fig_small_panel_llmbudget[_tau].pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | same |
 | `fig_intermediate_budget[_tau].pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
 
 Each sweep is drawn in both metrics recorded per cell (`METRIC`): excess held-out log loss and
