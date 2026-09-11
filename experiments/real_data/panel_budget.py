@@ -86,7 +86,8 @@ def panel_budget_data():
     assert data.groupby(keys).seed.apply(lambda x: set(x) == set(range(SEEDS))).all()
     return data.groupby(keys).agg(excess=('excess', 'mean'), se=('excess', 'sem'),
                                   tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
-                                  n_H=('n_H', 'mean'), n_L=('n_L', 'mean'), n=('seed', 'size')).reset_index()
+                                  N=('N', 'first'), n_H=('n_H', 'mean'), n_L=('n_L', 'mean'),
+                                  n=('seed', 'size')).reset_index()
 
 
 def human_only_curve():
@@ -103,7 +104,8 @@ def human_only_curve():
         raw = raw[(raw.sweep == 'budget') & (raw.method == 'human_only') & (~raw.failed) & (raw.seed < SEEDS)
                   & (raw.panel == 'all')]
         g = raw.groupby('level').agg(n_H=('n_H', 'mean'), excess=('excess', 'mean'), se=('excess', 'sem'),
-                                     tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem')).reset_index()
+                                     tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
+                                     N=('N', 'first')).reset_index()
         frames.append(g.assign(dataset=ds, method='human_only').rename(columns={'level': 'n_H_level'}))
     return pd.concat(frames, ignore_index=True)
 
@@ -124,7 +126,7 @@ def intermediate_data(root):
     z['delta_vs_cons'] = z.excess - z.cons_excess
     summary = z.reset_index().groupby(keys).agg(
         n_H=('n_H', 'mean'), excess=('excess', 'mean'), se=('excess', 'sem'),
-        tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
+        tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'), N=('N', 'first'),
         delta_vs_cons=('delta_vs_cons', 'mean'), paired_mcse=('delta_vs_cons', 'sem')).reset_index()
 
     # the run fitted only the calibrated estimators, so add the panel-independent human reference
@@ -211,25 +213,31 @@ FIGURES = {
     'fig_small_panel': dict(
         source='budget',
         # n_H is this sweep's x axis, so the row label names the LLM side instead
-        row=lambda ds: f'{DATASET_LABEL[ds]}, all LLM data',
+        row=lambda ds, N: f'{DATASET_LABEL[ds]} ($N={N}$), all LLM data',
         x_column='n_H', xlabel=r'human calibration labels $n_{\mathrm{H}}$'),
     'fig_small_panel_llmbudget': dict(
         source='llm_budget',
-        row=lambda ds: f'{DATASET_LABEL[ds]}, $n_H={NH[ds]}$',
+        row=lambda ds, N: f'{DATASET_LABEL[ds]} ($N={N}$), $n_H={NH[ds]}$',
         x_column='level', xlabel=r'LLM comparisons $n_{\mathrm{L}}$',
         flat=('human_only',), xticks=False),
     'fig_intermediate_budget': dict(
         source='intermediate',
-        row=lambda ds: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$',
+        row=lambda ds, N: f'{DATASET_LABEL[ds]} ($N={N}$), $n_L={INTERMEDIATE_NL[ds]}$',
         x_column='n_H', xlabel=r'human calibration labels $n_{\mathrm{H}}$'),
 }
 
 
-def figure_kwargs(name, metric):
-    """panel_grid keyword arguments for one figure and metric (the single source of truth)."""
+def figure_kwargs(name, metric, rows):
+    """panel_grid keyword arguments for one figure and metric (the single source of truth).
+
+    `rows` is the frame being drawn; the item count N of each dataset is read from it rather
+    than hard-coded, so the row labels cannot fall out of step with the fitted panels.
+    """
     spec = {k: v for k, v in FIGURES[name].items() if k not in ('source', 'row')}
     label, row = METRIC[metric]['label'], FIGURES[name]['row']
-    return dict(metric=metric, methods=METHODS, ylabel=lambda ds: f'{row(ds)}\n{label}', **spec)
+    n_items = rows.groupby('dataset')['N'].agg(lambda x: int(x.dropna().iloc[0])).to_dict()
+    return dict(metric=metric, methods=METHODS,
+                ylabel=lambda ds: f'{row(ds, n_items[ds])}\n{label}', **spec)
 
 
 def figure_name(name, metric):
@@ -266,7 +274,7 @@ def make_figures(which=('small', 'llm', 'intermediate'),
         for name in wanted:
             rows = figure_rows(name, summary, intermediate)
             for metric in metrics:
-                _save(panel_grid(rows, **figure_kwargs(name, metric)), out, figure_name(name, metric))
+                _save(panel_grid(rows, **figure_kwargs(name, metric, rows)), out, figure_name(name, metric))
                 drawn[figure_name(name, metric)] = rows
     return drawn
 
