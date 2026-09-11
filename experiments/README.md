@@ -151,8 +151,8 @@ panels `small6` / `large6` / `all`), from two runs that share the same 50 record
 
 | Figure | Sweep | Fixed | Source |
 |---|---|---|---|
-| `fig_small_panel[_tau].pdf` | human budget n_H | as-collected LLM data | `results/endpoint_margin_appendix` + robustness rows |
-| `fig_small_panel_llmbudget[_tau].pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | same |
+| `fig_small_panel[_tau].pdf` | human budget n_H | as-collected LLM data | robustness rows |
+| `fig_small_panel_llmbudget[_tau].pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | robustness rows |
 | `fig_intermediate_budget[_tau].pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
 
 Each sweep is drawn in both metrics recorded per cell (`METRIC`): excess held-out log loss and
@@ -162,12 +162,13 @@ probability gap and by the number of test comparisons on a pair, so it is domina
 low-budget regime where the adaptive fit is unstable, while tau charges every misordered pair
 equally. Only the log-loss versions appear in the manuscript.
 
-Methods: Human, Cons-Cal, DIAL-mu (raw) = the plain GACV minimizer, DIAL-mu = the 1/n_H
-endpoint margin of `endpoint_margin.choose_endpoint_margin`. `panel_budget_data` and
-`intermediate_data` assert that every cell carries all 50 seeds before anything is plotted.
+Methods are the shared panel of `experiments/style.py` -- Human, Cons-Cal, and DIAL-mu at its
+GACV-selected weight -- so this study draws the same estimators, colours and dashes as the
+other two. `panel_budget_data` and `intermediate_data` assert that every cell carries all 50
+seeds before anything is plotted.
 
 ```bash
-python -m experiments.real_data.endpoint_margin --seeds 50 --workers 6 --panels all small6 large6 --out results/endpoint_margin_appendix
+python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12
 python -m experiments.real_data.intermediate_budget --seeds 50 --workers 8 --out /tmp/dial-intermediate-budget-50
 python -m experiments.real_data.intermediate_budget_validate --root /tmp/dial-intermediate-budget-50
 python -m experiments.real_data.panel_budget --figures all        # or: small, llm, intermediate

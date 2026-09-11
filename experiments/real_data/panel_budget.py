@@ -9,15 +9,16 @@ One study, three figures, one 3 x 3 grid (datasets x judge panels) in all of the
 All three share one layout -- judge panels as columns, datasets as rows, and each row labelled
 with whichever budget is held fixed -- plus a `_tau` companion in Kendall's tau.
 
-The first two read the 50-seed endpoint-margin run (`results/endpoint_margin_appendix`)
-together with the main robustness rows; the third reads an `intermediate_budget` run
-directory. Both sources carry the same methods and the same 50 record splits, so the three
-figures are directly comparable -- which is why they live in one module rather than three.
+The first two read the main robustness rows; the third reads an `intermediate_budget` run
+directory. Both sources carry the same three estimators of `experiments/style.py` -- Human,
+Cons-Cal, DIAL-mu with its GACV weight -- over the same 50 record splits, so the figures are
+directly comparable, which is why they live in one module rather than three.
 
     python -m experiments.real_data.panel_budget --figures all
     python -m experiments.real_data.panel_budget --figures intermediate --intermediate-root /tmp/dial-intermediate-budget-50
 
-Data generation stays where it was: `endpoint_margin.py` and `intermediate_budget.py`.
+Data generation stays where it was: `run_real_data.py --study robustness` and
+`intermediate_budget.py`.
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.ticker import NullFormatter, ScalarFormatter
 
-from experiments.style import DATASET_LABEL, GRID, RCPARAMS
+from experiments.style import DATASET_LABEL, GRID, LABEL, RCPARAMS, STYLE
 
 from .robustness import ROOT
 from .robustness_plot import load
@@ -44,11 +45,11 @@ NH = {'arena_33k': 300, 'mt_bench': 80, 'pandalm': 60}          # human budget h
 INTERMEDIATE_NL = {'arena_33k': 2000, 'mt_bench': 160, 'pandalm': 100}
 XTICKS = {'arena_33k': [50, 200, 800, 3200], 'mt_bench': [20, 80, 320], 'pandalm': [20, 80, 320]}
 
-# (key, label, colour, linestyle, marker); human_only is first and is dropped where it is absent
-METHODS = [('human_only', 'Human', '#52514e', '-', None),
-           ('consensus_cal', 'Cons-Cal', '#1baf7a', '--', 'v'),
-           ('dial_mu', r'DIAL-$\mu$ (raw)', '#4279ad', ':', 's'),
-           ('dial_margin_1', r'DIAL-$\mu$', '#c0392b', '-', 'o')]
+# Names, colours and dashes come from the shared panel of experiments/style.py, so this study
+# draws the same three estimators the simulation and robustness studies do. human_only is first
+# and is dropped where it is absent.
+METHOD_KEYS = ['human_only', 'consensus_cal', 'dial_mu']
+METHODS = [(k, LABEL[k], STYLE[k]['color'], STYLE[k]['ls'], STYLE[k]['marker']) for k in METHOD_KEYS]
 SEEDS = 50
 
 # Both metrics are recorded per cell by every runner; `excess` is minimized, `tau` maximized,
@@ -60,33 +61,24 @@ METRIC = {
 
 
 # --------------------------------------------------------------------------- data
-def panel_budget_data(margin_root):
-    """Rows behind the human- and LLM-budget figures, as mean excess with its Monte Carlo s.e.
+def panel_budget_data():
+    """Rows behind the human- and LLM-budget figures, as means with their Monte Carlo s.e.
 
-    The adaptive `dial_margin_1` curve comes from the endpoint-margin run, the other methods
-    from the main robustness rows; both are checked to cover the same cells and all 50 seeds.
+    All three methods come from the main robustness rows, which are checked to cover every
+    cell with all 50 seeds.
     """
-    adaptive = pd.read_csv(Path(margin_root) / 'rows.csv')
-    adaptive = adaptive[adaptive.method == 'dial_margin_1'].copy()
     frames = []
     for ds in NH:
         raw = load(ds, ROOT)
         raw = raw[raw.sweep.isin(['budget', 'llm_budget']) & raw.panel.isin(PANELS)
-                  & raw.method.isin(['human_only', 'consensus_cal', 'dial_mu']) & (raw.seed < SEEDS)]
+                  & raw.method.isin(METHOD_KEYS) & (raw.seed < SEEDS)]
         raw = raw[(raw.sweep == 'budget') | ((raw.sweep == 'llm_budget') & (raw.n_H_level == NH[ds]))].copy()
         # Human-only predictions use the same calibration draw for every judge panel.
         human = raw[(raw.panel == 'all') & (raw.method == 'human_only')]
         raw = raw[raw.method != 'human_only']
         raw = pd.concat([raw] + [human.assign(panel=p) for p in PANELS], ignore_index=True)
         raw['dataset'] = ds
-
-        ad = adaptive[(adaptive.dataset == ds) & adaptive.panel.isin(PANELS) & (adaptive.seed < SEEDS)]
-        ad = ad[(ad.sweep == 'budget') | ((ad.sweep == 'llm_budget') & (ad.n_H_level == NH[ds]))]
-        cells = ['sweep', 'panel', 'level', 'n_H_level', 'seed']
-        raw_keys = set(map(tuple, raw[raw.method == 'dial_mu'][cells].to_numpy()))
-        ad_keys = set(map(tuple, ad[cells].to_numpy()))
-        assert raw_keys == ad_keys, (ds, 'raw/adaptive cell mismatch', len(raw_keys), len(ad_keys))
-        frames.extend([raw, ad])
+        frames.append(raw)
 
     data = pd.concat(frames, ignore_index=True)
     keys = ['dataset', 'sweep', 'panel', 'level', 'n_H_level', 'method']
@@ -101,11 +93,12 @@ def intermediate_data(root):
     """Rows behind the intermediate-LLM-budget figure, with the run's own completeness checks."""
     root = Path(root)
     x = pd.read_csv(root / 'rows.csv')
+    x = x[x.method.isin(METHOD_KEYS)].copy()          # the run also stores endpoint-margin variants
     seeds = json.loads((root / 'design.json').read_text())['seeds']
     keys = ['dataset', 'panel', 'n_H_level', 'method']
     assert not x.duplicated(keys + ['seed']).any()
     assert x.groupby(keys).seed.apply(lambda z: set(z) == set(range(seeds))).all()
-    assert len(x) == 57 * 3 * seeds
+    assert len(x) == 57 * 2 * seeds
 
     base = x[x.method == 'consensus_cal'].set_index(['dataset', 'panel', 'n_H_level', 'seed'])
     z = x.join(base.excess.rename('cons_excess'), on=['dataset', 'panel', 'n_H_level', 'seed'], validate='many_to_one')
@@ -150,7 +143,7 @@ def panel_grid(summary, x_column, ylabel, xlabel, methods, flat=(), titles=PANEL
                 if method in flat:
                     ax.axhline(g[value].mean(), color=color, lw=1, label=label)
                     continue
-                lw = 1.45 if method == 'dial_margin_1' else 1.05
+                lw = 1.45 if method == 'dial_mu' else 1.05
                 ax.plot(g[x_column], g[value], color=color, ls=ls, marker=marker, ms=2.5, lw=lw, label=label)
                 if method != 'human_only':
                     ax.fill_between(g[x_column], g[value] - 1.96 * g[err], g[value] + 1.96 * g[err],
@@ -188,7 +181,6 @@ def _save(fig, out, name):
 
 
 def make_figures(which=('small', 'llm', 'intermediate'),
-                 margin_root=ROOT / 'results' / 'endpoint_margin_appendix',
                  intermediate_root=ROOT / 'results' / 'intermediate_budget',
                  out=ROOT / 'figures',
                  metrics=('excess', 'tau')):
@@ -205,7 +197,7 @@ def make_figures(which=('small', 'llm', 'intermediate'),
 
     with plt.rc_context(RCPARAMS):
         if {'small', 'llm'} & set(which):
-            summary = panel_budget_data(margin_root)
+            summary = panel_budget_data()
             Path(out).mkdir(parents=True, exist_ok=True)
             summary.to_csv(Path(out) / 'panel_budget_plot_data.csv', index=False)
             for metric in metrics:
@@ -237,13 +229,12 @@ def main():
     matplotlib.use('Agg')                      # CLI is headless; the notebook keeps its own backend
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--figures', default='all', help="comma-separated: small, llm, intermediate, or all")
-    p.add_argument('--margin-root', type=Path, default=ROOT / 'results' / 'endpoint_margin_appendix')
     p.add_argument('--intermediate-root', type=Path, default=ROOT / 'results' / 'intermediate_budget')
     p.add_argument('--out', type=Path, default=ROOT / 'figures')
     a = p.parse_args()
     which = ('small', 'llm', 'intermediate') if a.figures == 'all' else tuple(s.strip() for s in a.figures.split(','))
 
-    drawn = make_figures(which, a.margin_root, a.intermediate_root, a.out)
+    drawn = make_figures(which, a.intermediate_root, a.out)
     for name, summary in drawn.items():
         print(f'{a.out / name}.pdf: {len(summary)} plotted method/setting rows')
 
