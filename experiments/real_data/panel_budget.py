@@ -48,6 +48,13 @@ METHODS = [('human_only', 'Human', '#52514e', '-', None),
            ('dial_margin_1', r'DIAL-$\mu$', '#c0392b', '-', 'o')]
 SEEDS = 50
 
+# Both metrics are recorded per cell by every runner; `excess` is minimized, `tau` maximized,
+# so they need different y limits but nothing else.
+METRIC = {
+    'excess': dict(value='excess', err='se', label='excess held-out log loss'),
+    'tau': dict(value='tau', err='tau_se', label=r"Kendall's $\tau$, held-out ranking"),
+}
+
 
 # --------------------------------------------------------------------------- data
 def panel_budget_data(margin_root):
@@ -83,6 +90,7 @@ def panel_budget_data(margin_root):
     assert not data.duplicated(keys + ['seed']).any()
     assert data.groupby(keys).seed.apply(lambda x: set(x) == set(range(SEEDS))).all()
     return data.groupby(keys).agg(excess=('excess', 'mean'), se=('excess', 'sem'),
+                                  tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
                                   n_H=('n_H', 'mean'), n_L=('n_L', 'mean'), n=('seed', 'size')).reset_index()
 
 
@@ -101,23 +109,35 @@ def intermediate_data(root):
     z['delta_vs_cons'] = z.excess - z.cons_excess
     summary = z.reset_index().groupby(keys).agg(
         n_H=('n_H', 'mean'), excess=('excess', 'mean'), se=('excess', 'sem'),
+        tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
         delta_vs_cons=('delta_vs_cons', 'mean'), paired_mcse=('delta_vs_cons', 'sem')).reset_index()
     return summary, seeds
 
 
 # --------------------------------------------------------------------------- figure
-def panel_grid(summary, x_column, ylabel, xlabel, methods, flat=(), titles=PANEL_TITLE, suptitle=None, xticks=True):
+def panel_grid(summary, x_column, ylabel, xlabel, methods, flat=(), titles=PANEL_TITLE, suptitle=None,
+               xticks=True, metric='excess'):
     """The shared 3 x 3 figure: one row per dataset, one column per judge panel.
 
-    `flat` names methods drawn as a horizontal reference line (their value does not vary along
-    the x axis of that sweep); the y axis is shared within a row and excludes Human from its
-    upper limit, which is off the chart at the smallest budgets.
+    `metric` selects the plotted column through `METRIC`: 'excess' (held-out log loss, lower is
+    better, y starts at zero) or 'tau' (Kendall's tau against the held-out human ranking, higher
+    is better, y limits follow the data and stop at 1). `flat` names methods drawn as a
+    horizontal reference line, their value not varying along that sweep's x axis. The y axis is
+    shared within a row; for log loss it excludes Human from its upper limit, which is off the
+    chart at the smallest budgets.
     """
+    value, err = METRIC[metric]['value'], METRIC[metric]['err']
     fig, axes = plt.subplots(3, 3, figsize=(7.4, 6.6), sharey='row')
     for i, ds in enumerate(NH):
         row = summary[summary.dataset == ds]
-        scaled = row[row.method != 'human_only']
-        upper = max(.01, float((scaled.excess + 1.96 * scaled.se).max()) * 1.08)
+        if metric == 'excess':
+            scaled = row[row.method != 'human_only']
+            limits = (-.002, max(.01, float((scaled[value] + 1.96 * scaled[err]).max()) * 1.08))
+        else:
+            lo = float((row[value] - 1.96 * row[err]).min())
+            hi = float((row[value] + 1.96 * row[err]).max())
+            pad = .04 * max(hi - lo, .05)
+            limits = (lo - pad, min(1.0, hi + pad))
         for j, panel in enumerate(PANELS):
             ax = axes[i, j]
             for method, label, color, ls, marker in methods:
@@ -125,19 +145,19 @@ def panel_grid(summary, x_column, ylabel, xlabel, methods, flat=(), titles=PANEL
                 if g.empty:
                     continue
                 if method in flat:
-                    ax.axhline(g.excess.mean(), color=color, lw=1, label=label)
+                    ax.axhline(g[value].mean(), color=color, lw=1, label=label)
                     continue
                 lw = 1.45 if method == 'dial_margin_1' else 1.05
-                ax.plot(g[x_column], g.excess, color=color, ls=ls, marker=marker, ms=2.5, lw=lw, label=label)
+                ax.plot(g[x_column], g[value], color=color, ls=ls, marker=marker, ms=2.5, lw=lw, label=label)
                 if method != 'human_only':
-                    ax.fill_between(g[x_column], g.excess - 1.96 * g.se, g.excess + 1.96 * g.se,
+                    ax.fill_between(g[x_column], g[value] - 1.96 * g[err], g[value] + 1.96 * g[err],
                                     color=color, alpha=.085, lw=0)
             ax.set_xscale('log')
             ax.xaxis.set_minor_formatter(NullFormatter())
             if xticks:
                 ax.set_xticks(XTICKS[ds])
                 ax.xaxis.set_major_formatter(ScalarFormatter())
-            ax.set_ylim(-.002, upper)
+            ax.set_ylim(*limits)
             ax.grid(color=GRID, lw=.5)
             ax.tick_params(length=2.5, labelsize=6.5)
             if i == 0:
@@ -149,7 +169,7 @@ def panel_grid(summary, x_column, ylabel, xlabel, methods, flat=(), titles=PANEL
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', ncol=len(labels), frameon=False, bbox_to_anchor=(.5, -.005))
     if suptitle:
-        fig.suptitle(suptitle, fontsize=8.5, y=.995)
+        fig.suptitle(suptitle, fontsize=8.5, y=.975 if metric == 'tau' else .995)
     fig.tight_layout(rect=(0, .03, 1, .975 if suptitle else 1))
     return fig
 
@@ -167,35 +187,44 @@ def _save(fig, out, name):
 def make_figures(which=('small', 'llm', 'intermediate'),
                  margin_root=ROOT / 'results' / 'endpoint_margin_appendix',
                  intermediate_root=ROOT / 'results' / 'intermediate_budget',
-                 out=ROOT / 'figures'):
-    """Draw and save the requested figures; return {figure name: plotted summary frame}."""
+                 out=ROOT / 'figures',
+                 metrics=('excess', 'tau')):
+    """Draw and save the requested figures; return {figure name: plotted summary frame}.
+
+    Each figure is drawn once per metric; the Kendall-tau versions take a `_tau` suffix.
+    """
     drawn = {}
+
+    def draw(rows, name, metric, **kwargs):
+        name += '' if metric == 'excess' else '_tau'
+        _save(panel_grid(rows, metric=metric, **kwargs), out, name)
+        drawn[name] = rows
+
     with plt.rc_context(RCPARAMS):
         if {'small', 'llm'} & set(which):
             summary = panel_budget_data(margin_root)
             Path(out).mkdir(parents=True, exist_ok=True)
             summary.to_csv(Path(out) / 'panel_budget_plot_data.csv', index=False)
-            if 'small' in which:
-                rows = summary[summary.sweep == 'budget']
-                fig = panel_grid(rows, 'n_H', lambda ds: f'{DATASET_LABEL[ds]}\nexcess held-out log loss',
-                            r'human calibration labels $n_{\mathrm{H}}$', METHODS)
-                _save(fig, out, 'fig_small_panel')
-                drawn['fig_small_panel'] = rows
-            if 'llm' in which:
-                rows = summary[summary.sweep == 'llm_budget']
-                fig = panel_grid(rows, 'level', lambda ds: f'{DATASET_LABEL[ds]}\nexcess held-out log loss',
-                            r'LLM comparisons $n_{\mathrm{L}}$', METHODS, flat=('human_only',),
-                            suptitle=r'Fixed human budget $n_{\mathrm{H}}=300\,/\,80\,/\,60$', xticks=False)
-                _save(fig, out, 'fig_small_panel_llmbudget')
-                drawn['fig_small_panel_llmbudget'] = rows
+            for metric in metrics:
+                label = METRIC[metric]['label']
+                if 'small' in which:
+                    draw(summary[summary.sweep == 'budget'], 'fig_small_panel', metric,
+                         x_column='n_H', ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}\n{_l}',
+                         xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS)
+                if 'llm' in which:
+                    draw(summary[summary.sweep == 'llm_budget'], 'fig_small_panel_llmbudget', metric,
+                         x_column='level', ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}\n{_l}',
+                         xlabel=r'LLM comparisons $n_{\mathrm{L}}$', methods=METHODS, flat=('human_only',),
+                         suptitle=r'Fixed human budget $n_{\mathrm{H}}=300\,/\,80\,/\,60$', xticks=False)
         if 'intermediate' in which:
             rows, seeds = intermediate_data(intermediate_root)
-            fig = panel_grid(rows, 'n_H',
-                        lambda ds: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$\nexcess held-out log loss',
-                        r'human calibration labels $n_{\mathrm{H}}$', METHODS[1:],
-                        titles=PANELS, suptitle=f'Intermediate LLM budget: {seeds} matched seeds')
-            _save(fig, out, 'fig_intermediate_budget')
-            drawn['fig_intermediate_budget'] = rows
+            for metric in metrics:
+                label = METRIC[metric]['label']
+                draw(rows, 'fig_intermediate_budget', metric,
+                     x_column='n_H',
+                     ylabel=lambda ds, _l=label: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$\n{_l}',
+                     xlabel=r'human calibration labels $n_{\mathrm{H}}$', methods=METHODS[1:],
+                     titles=PANELS, suptitle=f'Intermediate LLM budget: {seeds} matched seeds')
     return drawn
 
 

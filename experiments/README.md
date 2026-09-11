@@ -151,9 +151,16 @@ panels `small6` / `large6` / `all`), from two runs that share the same 50 record
 
 | Figure | Sweep | Fixed | Source |
 |---|---|---|---|
-| `fig_small_panel.pdf` | human budget n_H | as-collected LLM data | `results/endpoint_margin_appendix` + robustness rows |
-| `fig_small_panel_llmbudget.pdf` | LLM budget n_L | n_H = 300 / 80 / 60 | same |
-| `fig_intermediate_budget.pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
+| `fig_small_panel[_tau].pdf` | human budget n_H | as-collected LLM data | `results/endpoint_margin_appendix` + robustness rows |
+| `fig_small_panel_llmbudget[_tau].pdf` | LLM budget n_L | n_H = 300 / 80 / 60 | same |
+| `fig_intermediate_budget[_tau].pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
+
+Each sweep is drawn in both metrics recorded per cell (`METRIC`): excess held-out log loss and
+Kendall's tau against the held-out human ranking, the latter taking a `_tau` suffix. They rank
+the methods the same way but weight the regimes differently -- log loss charges by the
+probability gap and by the number of test comparisons on a pair, so it is dominated by the
+low-budget regime where the adaptive fit is unstable, while tau charges every misordered pair
+equally. Only the log-loss versions appear in the manuscript.
 
 Methods: Human, Cons-Cal, DIAL-mu (raw) = the plain GACV minimizer, DIAL-mu = the 1/n_H
 endpoint margin of `endpoint_margin.choose_endpoint_margin`. `panel_budget_data` and
