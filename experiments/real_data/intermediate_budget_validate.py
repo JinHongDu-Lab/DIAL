@@ -32,7 +32,7 @@ def main():
     bymethod.to_csv(root/'fit_diagnostics.csv')
     report=dict(cells=len(jobs),rows=len(x),seeds=seeds,paired_checks=checks,decision_formula_verified=True,candidate_predictions_reused=True,diagnostics=diag)
     (root/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
-    paths=['intermediate_budget.py','intermediate_budget_plot.py','intermediate_budget_validate.py','endpoint_margin.py','robustness.py','human_budget_graph.py']
+    paths=['intermediate_budget.py','panel_budget.py','intermediate_budget_validate.py','endpoint_margin.py','robustness.py','human_budget_graph.py']
     (root/'source_hashes.json').write_text(json.dumps({p:hashlib.sha256((Path(__file__).parent/p).read_bytes()).hexdigest() for p in paths},indent=2)+'\n')
     print(json.dumps(report,indent=2));print(bymethod.to_string())
 

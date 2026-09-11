@@ -144,6 +144,31 @@ The real-data adapter should normalize the existing Parquet and JSONL artifacts
 to records containing dataset, record ID, judge, canonical item pair, binary or
 tie outcome, display-order sign, and human outcome.
 
+## Study 3: judge panels across budget regimes (`real_data/panel_budget.py`, `notebooks/3_panel_budget.ipynb`)
+
+Appendix G.4.2. One module draws all three figures on the same 3 x 3 grid (datasets x judge
+panels `small6` / `large6` / `all`), from two runs that share the same 50 record splits:
+
+| Figure | Sweep | Fixed | Source |
+|---|---|---|---|
+| `fig_small_panel.pdf` | human budget n_H | as-collected LLM data | `results/endpoint_margin_appendix` + robustness rows |
+| `fig_small_panel_llmbudget.pdf` | LLM budget n_L | n_H = 300 / 80 / 60 | same |
+| `fig_intermediate_budget.pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
+
+Methods: Human, Cons-Cal, DIAL-mu (raw) = the plain GACV minimizer, DIAL-mu = the 1/n_H
+endpoint margin of `endpoint_margin.choose_endpoint_margin`. `panel_budget_data` and
+`intermediate_data` assert that every cell carries all 50 seeds before anything is plotted.
+
+```bash
+python -m experiments.real_data.endpoint_margin --seeds 50 --workers 6 --panels all small6 large6 --out results/endpoint_margin_appendix
+python -m experiments.real_data.intermediate_budget --seeds 50 --workers 8 --out /tmp/dial-intermediate-budget-50
+python -m experiments.real_data.intermediate_budget_validate --root /tmp/dial-intermediate-budget-50
+python -m experiments.real_data.panel_budget --figures all        # or: small, llm, intermediate
+```
+
+The notebook draws the same three figures inline and adds the descriptive crossover table;
+the module forces the Agg backend only in its CLI, so both paths share one code path.
+
 ## Side-study runner
 
 `experiments/real_data/_runner.py` holds the resumable process-pool loop the side studies
