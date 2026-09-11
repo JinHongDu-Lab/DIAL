@@ -120,7 +120,7 @@ def test_calibration_restriction_test():
 
 def test_calibration_restriction_test_firth_fallback():
     """Under Ford (1957) separation the unrestricted fit falls back to Firth's bias-reduced
-    estimator (app:subsubsec:planner item 4) instead of silently returning the divergent MLE."""
+    estimator instead of silently returning the divergent MLE."""
     rng = np.random.default_rng(3)
     N = 5
     s0 = np.array([1.0, 0.5, 0.0, -0.5, -1.0])
@@ -146,18 +146,15 @@ def test_jobs():
     assert all(j[2] == "biased5" for j in jobs)
     lb = rb.jobs_for("llm_budget", cfg, range(1), smoke=True)
     grid = cfg["sweeps"]["llm_budget"]["n_H_grid"]
-    n_expected = sum(2 * 2 * len(rb.per_dataset(grid, d)) for d in cfg["sweeps"]["llm_budget"]["datasets"])
+    n_expected = sum(2 * len(cfg["sweeps"]["llm_budget"]["panels"]) * len(rb.per_dataset(grid, d)) for d in cfg["sweeps"]["llm_budget"]["datasets"])
     assert len(lb) == n_expected and {j[5] for j in lb if j[0] == "arena_33k"} == set(rb.per_dataset(grid, "arena_33k"))
     assert {j[4] for j in lb if j[0] == "mt_bench"} == set(rb.per_dataset(cfg["sweeps"]["llm_budget"]["levels"], "mt_bench")[:2])
     assert rb.per_dataset(5, "pandalm") == 5 and rb.per_dataset({"pandalm": 7}, "pandalm") == 7
     sp = rb.jobs_for("spectest", cfg, range(1), smoke=True)
     assert len(sp) == 3 * 2 and len(sp[0]) == 4
-    pl = rb.jobs_for("planner", cfg, range(2), smoke=True)
-    assert len(pl) == 3 * 2 and len(pl[0]) == 5 and pl[0][0] == "planner"
-    # keys are unique within a dataset's rows file (planner keys omit the dataset on purpose)
+    # keys are unique within a dataset's rows file
     assert len({(j[0], rb.job_key(j)) for j in jobs + lb}) == len(jobs) + len(lb)
     assert len({rb.job_key(j) for j in sp}) == len(sp)
-    assert len({(j[1], rb.job_key(j)) for j in pl}) == len(pl)
 
 
 def test_paired_design_across_levels(monkeypatch):

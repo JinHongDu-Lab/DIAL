@@ -32,10 +32,14 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 import argparse
 import json
 import time
-import tomllib
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11, per pyproject's tomli fallback
+    import tomli as tomllib  # type: ignore[no-redef]
 
 import numpy as np
 import pandas as pd
@@ -63,7 +67,7 @@ def _display_path(path: Path) -> Path:
     except ValueError:
         return path
 
-SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest", "planner")
+SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest")
 NOISE_KINDS = ("random", "position", "anti")
 METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
 DATASET_CODE = {"arena_33k": 1, "mt_bench": 2, "pandalm": 3}
@@ -413,7 +417,16 @@ def run_cell(job):
         try:
             sel = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_mu, lambda_grid=lam_grid, return_all=True, align="mu")
             lam = float(sel["lam"])
-            rec("dial_mu", sel["s_H"], **lam_fields(lam), n_dropped=len(sel["dropped"]), **flags(sel), **(inj(sel) if lam > 0 else {}))
+            selected_regular = next(p["regular"] for p in sel["gacv_path"] if p["lam"] == lam)
+            rec("dial_mu", sel["s_H"], **lam_fields(lam), gacv=float(sel["gacv"]), selected_regular=bool(selected_regular), n_dropped=len(sel["dropped"]), **flags(sel), **(inj(sel) if lam > 0 else {}))
+            if cfg.get("_gacv_endpoint_margins"):
+                from .endpoint_margin import choose_endpoint_margin
+                candidates = dict(sel["candidates"])
+                for margin in cfg["_gacv_endpoint_margins"]:
+                    chosen, reason, gap = choose_endpoint_margin(sel["gacv_path"], n_H_actual, margin, fallback=lam)
+                    fitted = candidates[chosen]
+                    point = next(p for p in sel["gacv_path"] if p["lam"] == chosen)
+                    rec(f"dial_margin_{margin:g}", fitted["s_H"], **lam_fields(chosen), margin_c=margin, margin_reason=reason, endpoint_gacv_gap=gap, gacv=float(point["gacv"]), selected_regular=bool(point["regular"]), n_dropped=len(sel["dropped"]), **flags(fitted))
             if want("oracle_test"):
                 losses = [(l, heldout_log_loss(f["s_H"], test_recs), f) for l, f in sel["candidates"]]
                 lam_o, _, f_o = min(losses, key=lambda x: x[1])
@@ -496,47 +509,6 @@ def run_spectest(job):
                  tau_mu_vs_test_human=float(kendalltau(mu, fit_human_only_btl(N, human_pairs(hum_te))["s_H"]).statistic), method="spectest")]
 
 
-def run_planner(job):
-    """Budget planning from a pilot (plan Section 25, item 1).
-
-    From a pilot human sample of size n_pilot and the LLM consensus mu-hat, the
-    likelihood-ratio statistic T of `calibration_restriction_test` estimates the
-    anchor misspecification as Delta-hat = max(0, (T - df) / (2 n_pilot)) (first
-    order: E[T] = df + 2 n_H Delta_W under a local departure). The predicted
-    excess risks are Delta-hat + (r+1)/(2 n) for the anchored estimator and
-    (N-1)/(2 n) for human-only, and the crossover is n* = (N-r-2)/(2 Delta-hat).
-    The same record split and pilot draw as the `budget` sweep are used, so the
-    pilot equals that sweep's calibration sample at n_H = n_pilot.
-    """
-    _, dataset, n_pilot, seed, cfg = job
-    dcfg = cfg[dataset]
-    panel = get_panel(dataset, cfg)
-    N, K = panel["N"], panel["K"]
-    code = DATASET_CODE[dataset]
-    test, train = split_records(panel["records"], dcfg["f_test"], np.random.default_rng([int(seed), code, 1]))
-    llm = panel["llm"][panel["llm"]["record"].isin(train)].reset_index(drop=True)
-    hum_train = panel["human"][panel["human"]["record"].isin(train)].reset_index(drop=True)
-    hum_test = panel["human"][panel["human"]["record"].isin(test) & (panel["human"]["y"] != 0.5)].reset_index(drop=True)
-    pilot = draw_budget(hum_train, int(n_pilot), np.random.default_rng([int(seed), code, 2]))
-    A = llm_arrays(llm, N, K)
-    r_llm = int(min(cfg["study"].get("llm_rank", 1), K - 1, N - 2))
-    mu = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], [(0, 1, 2.0, 1.0)], n_order=A[2], y_order=A[3])["mu"]
-    test_recs = human_records(hum_test)
-    floor = heldout_log_loss(fit_human_only_btl(N, human_pairs(hum_test))["s_H"], test_recs)
-    t_pilot = calibration_restriction_test(N, human_pairs(pilot), mu)
-    t_all = calibration_restriction_test(N, human_pairs(hum_train), mu)
-    n_p, n_all = int(len(pilot)), int(len(hum_train))
-    return [dict(dataset=dataset, sweep="planner", panel="all", kind="none", level=float(n_pilot), n_H_level=-1, n_H=n_p, seed=int(seed), N=N, K=K, r=0,
-                 n_L=int(len(llm)), n_test=int(len(hum_test)), n_train_human=n_all, floor=floor, method="planner",
-                 stat=t_pilot["stat"], df=t_pilot["df"], pvalue=t_pilot["pvalue"], human_only_exists=t_pilot["human_only_exists"], s_full_method=t_pilot["s_full_method"],
-                 delta_hat=max(0.0, (t_pilot["stat"] - t_pilot["df"]) / (2.0 * n_p)),
-                 delta_all=max(0.0, (t_all["stat"] - t_all["df"]) / (2.0 * n_all)), stat_all=t_all["stat"], exists_all=t_all["human_only_exists"], s_full_method_all=t_all["s_full_method"],
-                 excess_anchor_pilot=heldout_log_loss(t_pilot["s_restricted"], test_recs) - floor,
-                 excess_human_pilot=heldout_log_loss(t_pilot["s_full"], test_recs) - floor,
-                 excess_anchor_all=heldout_log_loss(t_all["s_restricted"], test_recs) - floor,
-                 excess_human_all=heldout_log_loss(t_all["s_full"], test_recs) - floor)]
-
-
 # --------------------------------------------------------------------------- driver
 def jobs_for(sweep, cfg, seeds, smoke=False):
     sw = cfg["sweeps"][sweep]
@@ -544,8 +516,6 @@ def jobs_for(sweep, cfg, seeds, smoke=False):
     if sweep == "spectest":
         levels = sw["levels"][:2] if smoke else sw["levels"]
         return [(s, nH, seed, cfg) for s in sw["settings"] for nH in levels for seed in seeds]
-    if sweep == "planner":
-        return [("planner", d, n_p, seed, cfg) for d in sw["datasets"] for n_p in (sw["levels"][d][:1] if smoke else sw["levels"][d]) for seed in seeds]
     for d in sw["datasets"]:
         for p in sw["panels"]:
             if sweep == "budget":
@@ -568,8 +538,6 @@ def jobs_for(sweep, cfg, seeds, smoke=False):
 
 
 def job_key(job):
-    if len(job) == 5:  # planner
-        return ("planner", "all", "none", float(job[2]), -1, int(job[3]))
     if len(job) == 4:  # spectest
         return ("spectest", "all", job[0], float(job[1]), -1, int(job[2]))
     d, sweep, p, kind, lv, nH, s, _ = job
@@ -604,7 +572,7 @@ def main(argv=None):
     p.add_argument("--select-rank", action="store_true")
     p.add_argument("--clean-fit", action="store_true")
     p.add_argument("--ja", action="store_true", help="run the JA-Ranking reanalysis (figure A1) and exit")
-    p.add_argument("--methods", default=None, help="comma-separated method keys: compute only these, for cells that lack them (spectest/planner skipped)")
+    p.add_argument("--methods", default=None, help="comma-separated method keys: compute only these, for cells that lack them (spectest skipped)")
     a = p.parse_args(argv)
     cfg = load_config(a.config)
     root = Path(a.out) if a.out else RESULTS_ROOT
@@ -635,7 +603,7 @@ def main(argv=None):
     only = [m.strip() for m in a.methods.split(",")] if a.methods else None
     if only:
         cfg["_only_methods"] = only
-        sweeps = [sw for sw in sweeps if sw not in ("spectest", "planner")]
+        sweeps = [sw for sw in sweeps if sw != "spectest"]
     jobs = []
     for sw in sweeps:
         jobs += jobs_for(sw, cfg, seeds, smoke=a.smoke)
@@ -645,7 +613,7 @@ def main(argv=None):
         path.parent.mkdir(parents=True, exist_ok=True)
         files[d], done[d] = path, existing_keys(path, only)
     def _dataset_of(j):
-        return j[0] if len(j) == 8 else (j[1] if len(j) == 5 else "arena_33k")
+        return j[0] if len(j) == 8 else "arena_33k"    # spectest jobs are Arena-only
 
     jobs = [j for j in jobs if job_key(j) not in done[_dataset_of(j)]]
     print(f"{len(jobs)} cells to run -> {_display_path(root)}", flush=True)
@@ -653,7 +621,7 @@ def main(argv=None):
     handles = {d: open(path, "a") for d, path in files.items()}
     try:
         with ProcessPoolExecutor(max_workers=a.workers) as ex:
-            futures = [ex.submit(run_planner if len(j) == 5 else (run_spectest if len(j) == 4 else run_cell), j) for j in jobs]
+            futures = [ex.submit(run_spectest if len(j) == 4 else run_cell, j) for j in jobs]
             for n, fut in enumerate(futures):
                 recs = fut.result()
                 for row in recs:

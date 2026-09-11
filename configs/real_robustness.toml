@@ -31,6 +31,11 @@ n_H = 60
 # Judge panels by name; "all" is every kept judge.
 [panels]
 biased5 = ["ollama-mistral-small-3.2-24b-direct", "anthropic-claude-haiku-4.5-batch-direct", "ollama-qwen3-30b-a3b-direct", "ollama-glm4-9b-direct", "ollama-deepseek-r1-1.5b-low"]
+# Six open-weight judges each, no paid API judges in either tier, chosen by disclosed
+# parameter count (data/configs/judges.json model tags) with a deliberate size gap:
+# small6 <= 9B, large6 >= 20B (~5.6x total-parameter ratio).
+small6 = ["ollama-deepseek-r1-1.5b-low", "ollama-deepseek-r1-7b-low", "ollama-deepseek-r1-8b-low", "ollama-starling-lm-7b-direct", "ollama-glm4-9b-direct", "ollama-gemma-3n-e4b-direct"]
+large6 = ["ollama-gpt-oss-20b-low", "ollama-mistral-small-3.2-24b-direct", "ollama-gemma-3-27b-direct", "ollama-qwen3-30b-a3b-direct", "ollama-deepseek-r1-32b-low", "ollama-llama-3.3-70b-direct"]
 
 # A2: display-order design. Default order = canonical item first; level = share of swapped copies kept.
 [sweeps.order]
@@ -61,7 +66,7 @@ n_H_fixed = { arena_33k = 1000, mt_bench = 80, pandalm = 60 }
 # C1: human budget with the as-collected balanced LLM data; level = n_H (-1 = all train labels).
 [sweeps.budget]
 datasets = ["arena_33k", "mt_bench", "pandalm"]
-panels = ["all"]
+panels = ["all", "small6", "large6"]
 rho_swap = 1.0
 [sweeps.budget.levels]
 arena_33k = [50, 100, 200, 400, 800, 1600, -1]
@@ -71,7 +76,7 @@ pandalm = [20, 40, 80, 160, 320, -1]
 # C2: LLM budget (rows subsampled from the balanced data) at two human budgets.
 [sweeps.llm_budget]
 datasets = ["arena_33k", "mt_bench", "pandalm"]
-panels = ["all", "biased5"]
+panels = ["all", "biased5", "small6", "large6"]
 rho_swap = 1.0
 # levels scaled by the number of pairs so that each benchmark spans about 3 to 100 judgments per pair
 levels = { arena_33k = [500, 1000, 2000, 5000, 20000], mt_bench = [40, 80, 160, 400, 1600], pandalm = [25, 50, 100, 250, 1000] }
@@ -83,15 +88,3 @@ settings = ["english_global", "nonenglish_global", "nonenglish_subset"]
 # n_H must let the unrestricted BTL on 20 items exist; levels above the subset's train pool collapse to "all".
 levels = [100, 200, 400, 800, 1600]
 f_test = 0.3
-
-# Planner: estimate the anchor misspecification from a pilot human sample and predict the budget curves.
-# Levels are aligned 1:1 with sweeps.budget.levels (same seed, same draw_budget draw per level:
-# robustness.run_planner and run_cell's budget branch both key off [seed, code, 1] for the split
-# and [seed, code, 2] for the draw), so the stopping-time backtest of item 3 can walk this exact
-# ladder and look up the matching budget-sweep row for its realized loss.
-[sweeps.planner]
-datasets = ["arena_33k", "mt_bench", "pandalm"]
-[sweeps.planner.levels]
-arena_33k = [50, 100, 200, 400, 800, 1600, -1]
-mt_bench = [20, 40, 80, 160, 320, -1]
-pandalm = [20, 40, 80, 160, 320, -1]

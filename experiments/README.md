@@ -57,8 +57,7 @@ python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 
   (anti-consensus / position-only judges injected into a small panel under a
   one-sided display), `budget` (human labels, balanced LLM data), `llm_budget`
   (LLM rows subsampled at fixed human budgets), `spectest` (likelihood-ratio
-  test of `s_0 = alpha mu` on Arena human subsets), and `planner` (budget
-  prediction from a pilot via the test statistic). Methods: the shared panel above, LLM rank
+  test of `s_0 = alpha mu` on Arena human subsets). Methods: the shared panel above, LLM rank
   `llm_rank = 1`, plus the diagnostics; `--methods a,b` recomputes only the listed
   methods for cells that lack them.
   `real_data/inspect_cell.py` rebuilds one cell's data exactly as `run_cell` does and prints
@@ -71,7 +70,7 @@ python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 
   dataset for position debiasing and for adaptive weighting/robustness, plus the
   judge-level position effects and the specification test), `fig_real_curves.pdf`
   (the Chatbot Arena sweeps behind the bars, in log loss and Kendall tau),
-  `fig_real_efficiency.pdf`, `fig_real_planner.pdf`, and `fig_real_diagnostics.pdf`.
+  `fig_real_efficiency.pdf`, and `fig_real_diagnostics.pdf`.
 
   ```bash
   python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12
@@ -144,6 +143,14 @@ Unavailable methods are skipped and reported; they must never emit dummy scores.
 The real-data adapter should normalize the existing Parquet and JSONL artifacts
 to records containing dataset, record ID, judge, canonical item pair, binary or
 tie outcome, display-order sign, and human outcome.
+
+## Side-study runner
+
+`experiments/real_data/_runner.py` holds the resumable process-pool loop the side studies
+share (`endpoint_margin`, `intermediate_budget`, `llm_thinning`): `completed_keys` reads the
+keys already in a JSONL file, `run_keyed_jobs` / `run_row_jobs` run the remaining cells and
+append their results, and `write_design` records the study's design. A study module should
+therefore contain only its design and its summaries.
 
 ## Output contract
 
