@@ -2,9 +2,9 @@
 
 One study, three figures, one 3 x 3 grid (datasets x judge panels) in all of them:
 
-  fig_small_panel.pdf            human budget n_H sweep, as-collected LLM data
-  fig_small_panel_llmbudget.pdf  LLM budget n_L sweep at a fixed n_H (300 / 80 / 60)
-  fig_intermediate_budget.pdf    human budget sweep at a fixed n_L (2000 / 160 / 100)
+  fig_panel_human_budget.pdf      human budget n_H sweep, as-collected LLM data
+  fig_panel_llm_budget.pdf        LLM budget n_L sweep at a fixed n_H (300 / 80 / 60)
+  fig_panel_intermediate_llm.pdf  human budget sweep at a fixed n_L (2000 / 160 / 100)
 
 All three share one layout -- judge panels as columns, datasets as rows, and each row labelled
 with whichever budget is held fixed. Only these excess-log-loss versions appear in the
@@ -210,19 +210,19 @@ def _save(fig, out, name):
 FIGURES = {
     # name -> everything panel_grid needs except the metric, so the CLI and the notebook cannot
     # drift apart: both ask figure_kwargs for the spec rather than spelling the arguments out.
-    'fig_small_panel': dict(
+    'fig_panel_human_budget': dict(
         source='budget',
         # n_H is this sweep's x axis, so the row label names the LLM side instead
-        row=lambda ds, N: f'{DATASET_LABEL[ds]} ($N={N}$), all LLM data',
+        row=lambda ds: f'{DATASET_LABEL[ds]}, all LLM data',
         x_column='n_H', xlabel=r'human calibration labels $n_{\mathrm{H}}$'),
-    'fig_small_panel_llmbudget': dict(
+    'fig_panel_llm_budget': dict(
         source='llm_budget',
-        row=lambda ds, N: f'{DATASET_LABEL[ds]} ($N={N}$), $n_H={NH[ds]}$',
+        row=lambda ds: f'{DATASET_LABEL[ds]}, $n_H={NH[ds]}$',
         x_column='level', xlabel=r'LLM comparisons $n_{\mathrm{L}}$',
         flat=('human_only',), xticks=False),
-    'fig_intermediate_budget': dict(
+    'fig_panel_intermediate_llm': dict(
         source='intermediate',
-        row=lambda ds, N: f'{DATASET_LABEL[ds]} ($N={N}$), $n_L={INTERMEDIATE_NL[ds]}$',
+        row=lambda ds: f'{DATASET_LABEL[ds]}, $n_L={INTERMEDIATE_NL[ds]}$',
         x_column='n_H', xlabel=r'human calibration labels $n_{\mathrm{H}}$'),
 }
 
@@ -230,14 +230,14 @@ FIGURES = {
 def figure_kwargs(name, metric, rows):
     """panel_grid keyword arguments for one figure and metric (the single source of truth).
 
-    `rows` is the frame being drawn; the item count N of each dataset is read from it rather
-    than hard-coded, so the row labels cannot fall out of step with the fitted panels.
+    `rows` is the frame being drawn, kept in the signature for callers that pass it. The row
+    labels name the dataset and the budget held fixed; the item count N of each dataset is in
+    the dataset table of the appendix, so it is not repeated here.
     """
     spec = {k: v for k, v in FIGURES[name].items() if k not in ('source', 'row')}
     label, row = METRIC[metric]['label'], FIGURES[name]['row']
-    n_items = rows.groupby('dataset')['N'].agg(lambda x: int(x.dropna().iloc[0])).to_dict()
     return dict(metric=metric, methods=METHODS,
-                ylabel=lambda ds: f'{row(ds, n_items[ds])}\n{label}', **spec)
+                ylabel=lambda ds: f'{row(ds)}\n{label}', **spec)
 
 
 def figure_name(name, metric):
@@ -251,7 +251,7 @@ def figure_rows(name, summary=None, intermediate=None):
     return intermediate if source == 'intermediate' else summary[summary.sweep == source]
 
 
-def make_figures(which=('small', 'llm', 'intermediate'),
+def make_figures(which=('human', 'llm', 'intermediate'),
                  intermediate_root=ROOT / 'results' / 'intermediate_budget',
                  out=ROOT / 'figures',
                  metrics=('excess',)):
@@ -260,8 +260,8 @@ def make_figures(which=('small', 'llm', 'intermediate'),
     One file per figure and metric. Only the `excess` versions appear in the manuscript, so they
     are the default; `metrics=('excess', 'tau')` also writes the `_tau` companions.
     """
-    names = {'small': 'fig_small_panel', 'llm': 'fig_small_panel_llmbudget',
-             'intermediate': 'fig_intermediate_budget'}
+    names = {'human': 'fig_panel_human_budget', 'llm': 'fig_panel_llm_budget',
+             'intermediate': 'fig_panel_intermediate_llm'}
     wanted = [names[w] for w in which]
     summary = intermediate = None
     drawn = {}
@@ -341,19 +341,19 @@ def calibration_figure(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALI
     axes[0].set_ylabel(r"Kendall's $\tau$")
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', ncol=len(labels), frameon=False, bbox_to_anchor=(.5, -.12))
+    mark_better(axes[0], 'up')   # before the layout, so the glyph is measured with the label
     fig.tight_layout()
-    mark_better(axes[0], 'up')   # after the layout: the arrow is placed from the rendered label
     return fig
 
 def main():
     matplotlib.use('Agg')                      # CLI is headless; the notebook keeps its own backend
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--figures', default='all', help="comma-separated: small, llm, intermediate, or all")
+    p.add_argument('--figures', default='all', help="comma-separated: human, llm, intermediate, or all")
     p.add_argument('--intermediate-root', type=Path, default=ROOT / 'results' / 'intermediate_budget')
     p.add_argument('--out', type=Path, default=ROOT / 'figures')
     p.add_argument('--metrics', default='excess', help="comma-separated: excess, tau, or both")
     a = p.parse_args()
-    which = ('small', 'llm', 'intermediate') if a.figures == 'all' else tuple(s.strip() for s in a.figures.split(','))
+    which = ('human', 'llm', 'intermediate') if a.figures == 'all' else tuple(s.strip() for s in a.figures.split(','))
 
     drawn = make_figures(which, a.intermediate_root, a.out,
                          metrics=tuple(m.strip() for m in a.metrics.split(',')))

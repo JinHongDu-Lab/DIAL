@@ -151,9 +151,9 @@ panels `small6` / `large6` / `all`), from two runs that share the same 50 record
 
 | Figure | Sweep | Fixed | Source |
 |---|---|---|---|
-| `fig_small_panel.pdf` | human budget n_H | as-collected LLM data | robustness rows |
-| `fig_small_panel_llmbudget.pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | robustness rows |
-| `fig_intermediate_budget.pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
+| `fig_panel_human_budget.pdf` | human budget n_H | as-collected LLM data | robustness rows |
+| `fig_panel_llm_budget.pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | robustness rows |
+| `fig_panel_intermediate_llm.pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
 
 Each cell records both metrics of `METRIC`: excess held-out log loss and Kendall's tau against
 the held-out human ranking. Only the log-loss versions appear in the manuscript, so they are what
@@ -172,7 +172,7 @@ seeds before anything is plotted.
 python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12
 python -m experiments.real_data.intermediate_budget --seeds 50 --workers 8 --out /tmp/dial-intermediate-budget-50
 python -m experiments.real_data.intermediate_budget_validate --root /tmp/dial-intermediate-budget-50
-python -m experiments.real_data.panel_budget --figures all        # or: small, llm, intermediate
+python -m experiments.real_data.panel_budget --figures all        # or: human, llm, intermediate
 ```
 
 The notebook draws the same three figures inline, prepends the main-text calibration figure

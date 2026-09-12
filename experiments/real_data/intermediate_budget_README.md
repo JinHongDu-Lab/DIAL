@@ -36,5 +36,5 @@ The validator checks complete matched seeds, candidate-prediction reuse, the mar
 `converged_pair_sensitivity.csv` is a descriptive restriction to pairs where both methods report convergence, not an unbiased replacement for the full analysis.
 `empirical_crossover.csv` summarizes the first tested human budget with a mean adaptive advantage greater than two paired Monte Carlo standard errors there and at every higher tested budget.
 That post hoc summary is not a calibrated test or a validated rule for new datasets.
-The final PDF is copied to the manuscript as `figures/fig_intermediate_budget.pdf`; the original five-seed pilot is preserved separately.
+The final PDF is copied to the manuscript as `figures/fig_panel_intermediate_llm.pdf`; the original five-seed pilot is preserved separately.
 Human-graph diagnostics use only the corresponding human training draws and are identical across judge panels; undirected connectivity does not imply existence of an unrestricted human BTL MLE.

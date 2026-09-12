@@ -48,9 +48,10 @@ STYLE = {
 }
 
 INK, INK_SOFT, GRID = "#0b0b0b", "#52514e", "#e4e3df"
-# Direction-of-merit arrows for the metric axes. Drawn in the label's own ink: the glyph already
-# says which way is better, and a green or red arrow would collide with DIAL-Anc and DIAL-Ada in
-# the same figure.
+# Direction-of-merit arrows for the metric axes, in the label's own ink: the glyph already says
+# which way is better, and a green or red arrow would collide with DIAL-Anc and DIAL-Ada in the
+# same figure. The arrow belongs to the label, so on a rotated y label it turns with the text and
+# reads left or right on the page, like the rest of that label.
 BETTER = {"up": "\u2191", "down": "\u2193"}
 DATASET_LABEL = {"arena_33k": "Chatbot Arena", "mt_bench": "MT-Bench", "pandalm": "PandaLM"}
 DATASET_COLOR = {"arena_33k": "#2a78d6", "mt_bench": "#eb6834", "pandalm": "#1baf7a"}
@@ -63,28 +64,21 @@ RCPARAMS = {
 }
 
 
-def mark_better(ax, direction, target="ylabel", sep=3.5):
-    """Put a direction-of-merit arrow after `ax`'s y label or title: up = higher is better, down
+def mark_better(ax, direction, target="ylabel", sep="\u2009"):
+    """Append a direction-of-merit arrow to `ax`'s y label or title: up = higher is better, down
     = lower is better.
 
-    The arrow is placed from the rendered label, so call this once the layout is final (after
-    `tight_layout`) and before saving. An empty label is skipped, which is what shared-y panels
-    want.
+    The arrow is part of the label, so it sits on the label's baseline and turns with it: on a
+    rotated y label it is read in the label's own frame, like the text it follows. An empty label
+    is skipped, which is what shared-y panels want. Call before the layout is computed so the
+    glyph is measured with the label.
     """
-    arrow = BETTER[direction]
-    fig = ax.figure
     label = ax.yaxis.label if target == "ylabel" else ax.title
-    if not label.get_text():
+    text = label.get_text()
+    if not text:
         return
-    fig.canvas.draw()
-    bb = label.get_window_extent(fig.canvas.get_renderer())
-    inv = fig.transFigure.inverted()
-    if target == "ylabel":   # the label is rotated, so its end is at the top
-        x, y = inv.transform((bb.x0 + bb.width / 2, bb.y1 + sep))
-        fig.text(x, y, arrow, color=INK, ha="center", va="bottom", size=mpl.rcParams["axes.labelsize"])
-    else:
-        x, y = inv.transform((bb.x1 + sep, bb.y0))
-        fig.text(x, y, arrow, color=INK, ha="left", va="bottom", size=mpl.rcParams["axes.titlesize"])
+    arrow = BETTER[direction]
+    label.set_text(f"{text}{sep}{arrow}")
 
 
 def plot_kwargs(method, with_marker=True):
