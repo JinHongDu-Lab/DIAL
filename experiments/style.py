@@ -22,15 +22,15 @@ APPENDIX = ["staged_w", "dial_mle_mu", "dial_mle_w", "oracle", "dial_rsel"]
 LABEL = {
     "human_only": "Human",
     "pooled_cal": "Pooled",
-    "consensus_cal": "Cons-Cal",
-    "dial_mu": "DIAL-$\\mu$",
+    "consensus_cal": "DIAL-Anc",
+    "dial_mu": "DIAL-Ada",
     "dial_nodeb": "DIAL-noPos",
     "dial_w": "DIAL-$W$",
-    "staged_w": "Cons-Cal-$W$ ($\\lambda=\\infty$, $W$)",
-    "dial_mle_mu": "DIAL-$\\mu$, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
+    "staged_w": "DIAL-Anc-$W$ ($\\lambda=\\infty$, $W$)",
+    "dial_mle_mu": "DIAL-Ada, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "dial_mle_w": "DIAL-$W$, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "oracle": "oracle weight",
-    "dial_rsel": "DIAL-$\\mu$, rank by GACV",
+    "dial_rsel": "DIAL-Ada, rank by GACV",
 }
 
 STYLE = {
