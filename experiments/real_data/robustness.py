@@ -51,7 +51,7 @@ from dial_judge.dial_model import fit_human_calibration
 from dial_judge.evaluate import heldout_log_loss, score_accuracy
 from dial_judge.gacv import btl_mle_exists, select_lambda
 from dial_judge.hja import select_rank_by_bic
-from dial_judge.inference import calibration_restriction_test, joint_sandwich
+from dial_judge.inference import calibration_restriction_test, joint_sandwich, llm_only_sandwich
 
 from .prepare import load_canonical
 
@@ -260,7 +260,8 @@ def select_rank(dataset, cfg, rank_cap=None):
 
 
 def clean_fit(dataset, cfg, cluster="pair", r=1):
-    """Joint MLE on the full as-collected panel with every decisive human label; per-judge b with sandwich intervals."""
+    """Full-panel fits behind the judge diagnostics: the joint MLE with every decisive human label and,
+    for the per-judge order effects, the LLM-only fit; both with cell-clustered sandwich intervals."""
     panel = get_panel(dataset, cfg)
     N, K = panel["N"], panel["K"]
     n_ijk, y_ijk, n_order, y_order = llm_arrays(panel["llm"], N, K)
@@ -268,9 +269,14 @@ def clean_fit(dataset, cfg, cluster="pair", r=1):
     st = fit_staged_structured_calibration(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order)
     jt = fit_dial(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order, init_params=(st["gamma"], st["mu"], st["U"], st["V"], st["b"]), tol=1e-6, max_steps=30)
     sw = joint_sandwich(jt, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster=cluster)
+    # the judge diagnostic is an LLM-side quantity, so it is reported from the LLM-only fit
+    # (the lambda = infinity fit, `st`) with the cell-clustered sandwich of app:clustered
+    sw_llm = llm_only_sandwich(st, N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, cluster=cluster)
     return dict(dataset=dataset, N=N, K=K, r=r, items=panel["items"], judges=panel["judges"], dropped_judges=panel["dropped_judges"],
                 n_L=float(n_order.sum()), n_H=float(sum(p[2] for p in pairs)), n_records=panel["n_records"], n_llm_ties=panel["n_llm_ties"], n_human_decisive=panel["n_human_decisive"],
                 b=[float(x) for x in jt["b"]], b_lower=[float(x) for x in sw["b"]["lower"]], b_upper=[float(x) for x in sw["b"]["upper"]],
+                b_llm=[float(x) for x in sw_llm["b"]["estimate"]], b_llm_lower=[float(x) for x in sw_llm["b"]["lower"]],
+                b_llm_upper=[float(x) for x in sw_llm["b"]["upper"]],
                 gamma=[float(x) for x in jt["gamma"]], mu=[float(x) for x in jt["mu"]], s_H=[float(x) for x in jt["s_H"]],
                 s_human_only=[float(x) for x in fit_human_only_btl(N, pairs)["s_H"]], lam=float(jt["lam"]), staged_b=[float(x) for x in st["b"]], converged=bool(jt["fit_info"]["converged"]))
 

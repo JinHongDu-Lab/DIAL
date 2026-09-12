@@ -22,6 +22,7 @@ from scipy.special import expit
 from scipy.stats import norm
 
 from .dial_model import human_nll_and_grad, pairs_to_arrays, total_llm_n
+from .hja import negative_log_likelihood_and_grad
 from .gacv import (
     hessian_from_grad,
     human_observation_grads,
@@ -290,6 +291,61 @@ def joint_sandwich(
         "n_L": n_L,
         "lam": lam,
     }
+
+
+def llm_only_sandwich(fit, N, K, r, n_ijk=None, y_ijk=None, n_order=None, y_order=None,
+                      alpha=0.05, rcond=1e-9, hess_eps=1e-5, cluster="pair"):
+    """Cluster-robust Wald intervals for b from the LLM-only structured fit (the lambda = infinity fit).
+
+    Same cell-clustered meat as `joint_sandwich` (app:clustered), specialized to the LLM block:
+    the criterion is ell_L / n_L alone, so
+
+        Cov(zeta_hat) ~= H_L^{-1} V_L^{cell} H_L^{-1} / n_L,
+
+    with H_L the Hessian of the per-observation LLM negative log-likelihood. The human-side
+    coordinates (alpha, a) of the reduced chart do not enter that criterion and are dropped
+    before inverting. Factor rotations are exact invariances of the LLM likelihood, so H_L is
+    singular in those directions and a pseudo-inverse is used, as in the joint case; b is
+    invariant under them.
+    """
+    use_order = n_order is not None
+    if not use_order:
+        raise ValueError("an order-effect fit is required for intervals on b")
+    if n_ijk is None:
+        from .hja import collapse_order_counts
+
+        n_ijk, y_ijk = collapse_order_counts(n_order, y_order)
+    judge_basis = make_centering_basis(K)
+    item_basis = make_centering_basis(N)
+    zeta = pack_reduced(fit["gamma"], fit["mu"], fit["U"], fit["V"], fit["b"], 0.0, np.zeros(max(r, 1)), use_order)
+    n_L = total_llm_n(n_ijk, n_order=n_order)
+
+    n_tail = 1 + max(r, 1)          # the (alpha, a) coordinates of the chart, unused by the LLM criterion
+
+    def grad_fn(z):
+        gamma, mu, U, V, b, _alpha, _a = unpack_reduced(z, N, K, r, judge_basis, item_basis, use_order)
+        l_l, gmu, ggamma, gU, gV, gb = negative_log_likelihood_and_grad(
+            mu, gamma, U, V, n_ijk, y_ijk, b=b, n_order=n_order, y_order=y_order)
+        parts = [judge_basis.T @ ggamma, (judge_basis.T @ gU).ravel(), gb,
+                 item_basis.T @ gmu, (item_basis.T @ gV).ravel()]
+        return l_l / n_L, np.concatenate([p / n_L for p in parts] + [np.zeros(n_tail)])
+
+    H = hessian_from_grad(grad_fn, zeta, eps=hess_eps)
+    J, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order,
+                                n_order, y_order, n_ijk, y_ijk, cluster=cluster)
+    # drop the human-side coordinates (alpha and a), which the LLM criterion does not involve
+    keep = np.arange(zeta.size - n_tail)
+    H_inv = np.linalg.pinv(H[np.ix_(keep, keep)], rcond=rcond)
+    cov = H_inv @ J[np.ix_(keep, keep)] @ H_inv / n_L
+
+    off_b = (K - 1) + (K - 1) * r
+    idx = np.arange(off_b, off_b + K)
+    cov_b = cov[np.ix_(idx, idx)]
+    z_crit = float(norm.ppf(1.0 - alpha / 2.0))
+    b = np.asarray(fit["b"], dtype=float)
+    se_b = np.sqrt(np.maximum(np.diag(cov_b), 0.0))
+    return {"cov_zeta": cov, "hessian": H, "score_cov": J, "cov_b": cov_b, "n_L": n_L,
+            "b": {"estimate": b, "se": se_b, "lower": b - z_crit * se_b, "upper": b + z_crit * se_b}}
 
 
 # ---------------------------------------------------------------------------
