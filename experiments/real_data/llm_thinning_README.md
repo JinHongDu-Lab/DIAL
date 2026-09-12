@@ -7,8 +7,10 @@ Run from `code/DIAL`, using the experiment environment:
 
 ```bash
 python -m experiments.real_data.llm_thinning --seeds 50 --workers 8
-python -m experiments.real_data.llm_thinning_plot
 ```
+
+The figure script was removed with the rest of the unused plotting code (2026-09-12); the run
+still writes its rows and summary, which is what this exploratory study is read from.
 
 The design crosses Arena/MT-Bench/PandaLM with all/small6/large6 judge panels.
 Human budgets are 50 and 100 for Arena, and 20 and 40 for MT-Bench and PandaLM.

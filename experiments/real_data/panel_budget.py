@@ -7,7 +7,8 @@ One study, three figures, one 3 x 3 grid (datasets x judge panels) in all of the
   fig_intermediate_budget.pdf    human budget sweep at a fixed n_L (2000 / 160 / 100)
 
 All three share one layout -- judge panels as columns, datasets as rows, and each row labelled
-with whichever budget is held fixed -- plus a `_tau` companion in Kendall's tau.
+with whichever budget is held fixed. Only these excess-log-loss versions appear in the
+manuscript; `--metrics excess,tau` also writes a `_tau` companion in Kendall's tau.
 
 The first two read the main robustness rows; the third reads an `intermediate_budget` run
 directory. Both sources carry the same three estimators of `experiments/style.py` -- Human,
@@ -201,8 +202,7 @@ def _save(fig, out, name):
     """Save inside the caller's rc context: the tight bbox and embedded fonts depend on it."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out / f'{name}.pdf', bbox_inches='tight')
-    fig.savefig(out / f'{name}.png', dpi=160, bbox_inches='tight')
+    fig.savefig(out / f'{name}.pdf', dpi=300, bbox_inches='tight')
     plt.close(fig)
     return out / f'{name}.pdf'
 
@@ -254,10 +254,11 @@ def figure_rows(name, summary=None, intermediate=None):
 def make_figures(which=('small', 'llm', 'intermediate'),
                  intermediate_root=ROOT / 'results' / 'intermediate_budget',
                  out=ROOT / 'figures',
-                 metrics=('excess', 'tau')):
+                 metrics=('excess',)):
     """Draw and save the requested figures; return {figure name: plotted summary frame}.
 
-    Each figure is drawn once per metric; the Kendall-tau versions take a `_tau` suffix.
+    One file per figure and metric. Only the `excess` versions appear in the manuscript, so they
+    are the default; `metrics=('excess', 'tau')` also writes the `_tau` companions.
     """
     names = {'small': 'fig_small_panel', 'llm': 'fig_small_panel_llmbudget',
              'intermediate': 'fig_intermediate_budget'}
@@ -279,16 +280,82 @@ def make_figures(which=('small', 'llm', 'intermediate'),
     return drawn
 
 
+
+# --------------------------------------------------------------------------- main-text calibration figure
+CALIBRATION_DATASET = 'arena_33k'      # the only benchmark whose item set makes tau informative
+CALIBRATION_PANEL = 'all'              # the paper's 21-judge panel
+HUMAN_EXISTS_LABEL = r'human-only MLE exists ($n_{{\mathrm{{H}}}}\geq{:,}$)'
+
+
+def human_exists_budgets(ds=CALIBRATION_DATASET):
+    """Human budgets at which the unrestricted human MLE exists in every record split.
+
+    Below them the reported human fit is the bounded maximizer, not the MLE, so the main-text
+    ranking figure drops those points instead of plotting a mixture of the two. The budget is
+    identified by the realized mean n_H, which is what both frames carry (the `budget` sweep
+    keys its levels through `level`, the intermediate run through `n_H_level`).
+    """
+    raw = load(ds, ROOT)
+    raw = raw[(raw.sweep == 'budget') & (raw.panel == CALIBRATION_PANEL) & (raw.method == 'human_only')
+              & (raw.seed < SEEDS)]
+    g = raw.groupby('level').agg(exists=('human_only_exists', 'mean'), n_H=('n_H', 'mean'))
+    return {round(float(v)) for v in g.loc[g.exists >= 1, 'n_H']}
+
+
+def calibration_figure(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL):
+    """Main-text figure: human-label efficiency and the anchor--adapt crossover in Kendall's tau.
+
+    (a) the collected LLM judgments of the full judge panel, (b) the same panel at the
+    intermediate LLM budget, both against the human calibration budget on one shared y axis.
+    """
+    keep = human_exists_budgets(ds)
+    n_star = min(keep)   # smallest budget at which the unrestricted human MLE exists in every split
+    rows = [summary[(summary.sweep == 'budget')], intermediate]
+    titles = [f'(a) all LLM judgments', f'(b) $n_{{\\mathrm{{L}}}}={INTERMEDIATE_NL[ds]:,}$']
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.05), sharey=True)
+    for ax, frame, title in zip(axes, rows, titles):
+        g0 = frame[(frame.dataset == ds) & (frame.panel == panel)]
+        for method, label, color, ls, marker in METHODS:
+            g = g0[g0.method == method].sort_values('n_H')
+            if method == 'human_only':
+                g = g[g.n_H.round().isin(keep)]
+            if g.empty:
+                continue
+            lw = 1.45 if method == 'dial_mu' else 1.05
+            ax.plot(g.n_H, g.tau, color=color, ls=ls, marker=marker, ms=3, lw=lw, label=label)
+            ax.fill_between(g.n_H, g.tau - 1.96 * g.tau_se, g.tau + 1.96 * g.tau_se,
+                            color=color, alpha=.085, lw=0)
+        # The human MLE exists above n_star regardless of the LLM budget, so the same line is
+        # drawn in both panels; left of it the human-only fit is the bounded maximizer and is not
+        # plotted.
+        ax.axvline(n_star, color=STYLE['human_only']['color'], ls='--', lw=.8, zorder=1,
+                   label='_nolegend_' if ax is not axes[0] else HUMAN_EXISTS_LABEL.format(n_star))
+        ax.set_xscale('log')
+        ax.xaxis.set_minor_formatter(NullFormatter())
+        ax.set_xticks(XTICKS[ds])
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.set_xlabel(r'human calibration labels $n_{\mathrm{H}}$')
+        ax.set_title(title, fontsize=8.5)
+        ax.grid(color=GRID, lw=.5)
+        ax.tick_params(length=2.5, labelsize=6.5)
+    axes[0].set_ylabel(METRIC['tau']['label'])
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=len(labels), frameon=False, bbox_to_anchor=(.5, -.12))
+    fig.tight_layout()
+    return fig
+
 def main():
     matplotlib.use('Agg')                      # CLI is headless; the notebook keeps its own backend
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--figures', default='all', help="comma-separated: small, llm, intermediate, or all")
     p.add_argument('--intermediate-root', type=Path, default=ROOT / 'results' / 'intermediate_budget')
     p.add_argument('--out', type=Path, default=ROOT / 'figures')
+    p.add_argument('--metrics', default='excess', help="comma-separated: excess, tau, or both")
     a = p.parse_args()
     which = ('small', 'llm', 'intermediate') if a.figures == 'all' else tuple(s.strip() for s in a.figures.split(','))
 
-    drawn = make_figures(which, a.intermediate_root, a.out)
+    drawn = make_figures(which, a.intermediate_root, a.out,
+                         metrics=tuple(m.strip() for m in a.metrics.split(',')))
     for name, summary in drawn.items():
         print(f'{a.out / name}.pdf: {len(summary)} plotted method/setting rows')
 

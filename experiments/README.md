@@ -65,7 +65,7 @@ python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 
   (`python -m experiments.real_data.inspect_cell mt_bench noise_scarce biased5 anti 0 --seed 1`).
   `real_data/ja_reanalysis.py` rescored HJA's JA-Ranking judge files against our
   human labels (`--ja`). Rows append to `results/real_robustness/<dataset>/rows.jsonl`,
-  `robustness_plot.py` aggregates, and `notebooks/real_data_robustness.ipynb`
+  `robustness_plot.py` aggregates, and `notebooks/2_real_data_position.ipynb`
   draws `figures/fig_real_main.pdf` (2 x 4: grouped bars over three levels per
   dataset for position debiasing and for adaptive weighting/robustness, plus the
   judge-level position effects and the specification test), `fig_real_curves.pdf`
@@ -128,7 +128,7 @@ three studies, so the coverage rule no longer excludes anyone; the adapter keys
 each judge on its results directory and keeps a row-level alias variant (for
 example the `-64tok` gap-fill re-queries of Claude Haiku) in `judge_alias`.
 
-`notebooks/figure1b.ipynb` reads the saved CSVs and renders the figure.
+`notebooks/0_motivation.ipynb` reads the saved CSVs and renders the figure.
 
 Original and swapped responses belonging to one record must stay in the same
 split. Full-data estimates are empirical references, not literal ground truth.
@@ -144,23 +144,24 @@ The real-data adapter should normalize the existing Parquet and JSONL artifacts
 to records containing dataset, record ID, judge, canonical item pair, binary or
 tie outcome, display-order sign, and human outcome.
 
-## Study 3: judge panels across budget regimes (`real_data/panel_budget.py`, `notebooks/3_panel_budget.ipynb`)
+## Study 3: judge panels across budget regimes (`real_data/panel_budget.py`, `notebooks/3_real_data_calibration.ipynb`)
 
 Appendix G.4.2. One module draws all three figures on the same 3 x 3 grid (datasets x judge
 panels `small6` / `large6` / `all`), from two runs that share the same 50 record splits:
 
 | Figure | Sweep | Fixed | Source |
 |---|---|---|---|
-| `fig_small_panel[_tau].pdf` | human budget n_H | as-collected LLM data | robustness rows |
-| `fig_small_panel_llmbudget[_tau].pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | robustness rows |
-| `fig_intermediate_budget[_tau].pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
+| `fig_small_panel.pdf` | human budget n_H | as-collected LLM data | robustness rows |
+| `fig_small_panel_llmbudget.pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | robustness rows |
+| `fig_intermediate_budget.pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
 
-Each sweep is drawn in both metrics recorded per cell (`METRIC`): excess held-out log loss and
-Kendall's tau against the held-out human ranking, the latter taking a `_tau` suffix. They rank
-the methods the same way but weight the regimes differently -- log loss charges by the
-probability gap and by the number of test comparisons on a pair, so it is dominated by the
-low-budget regime where the adaptive fit is unstable, while tau charges every misordered pair
-equally. Only the log-loss versions appear in the manuscript.
+Each cell records both metrics of `METRIC`: excess held-out log loss and Kendall's tau against
+the held-out human ranking. Only the log-loss versions appear in the manuscript, so they are what
+`--metrics` draws by default; `--metrics excess,tau` (or `show(name, metrics=METRIC)` in the
+notebook) adds the `_tau` companions. They rank the methods the same way but weight the regimes
+differently: log loss charges by the probability gap and by the number of test comparisons on a
+pair, so it is dominated by the low-budget regime where the adaptive fit is unstable, while tau
+charges every misordered pair equally.
 
 Methods are the shared panel of `experiments/style.py` -- Human, Cons-Cal, and DIAL-mu at its
 GACV-selected weight -- so this study draws the same estimators, colours and dashes as the
@@ -174,8 +175,9 @@ python -m experiments.real_data.intermediate_budget_validate --root /tmp/dial-in
 python -m experiments.real_data.panel_budget --figures all        # or: small, llm, intermediate
 ```
 
-The notebook draws the same three figures inline and adds the descriptive crossover table;
-the module forces the Agg backend only in its CLI, so both paths share one code path.
+The notebook draws the same three figures inline, prepends the main-text calibration figure
+(`fig_real_calibration.pdf`, Figure 4), and adds the descriptive crossover table; the module
+forces the Agg backend only in its CLI, so both paths share one code path.
 
 ## Side-study runner
 
