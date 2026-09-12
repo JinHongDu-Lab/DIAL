@@ -23,14 +23,14 @@ LABEL = {
     "human_only": "Human",
     "pooled_cal": "Pooled",
     "consensus_cal": "DIAL-Anc",
-    "dial_mu": "DIAL-Ada ($\\mu$)",
+    "dial_mu": "DIAL-Ada",
     "dial_nodeb": "DIAL-noPos",
     "dial_w": "DIAL-Ada ($W$)",
     "staged_w": "DIAL-Anc-$W$ ($\\lambda=\\infty$, $W$)",
-    "dial_mle_mu": "DIAL-Ada ($\\mu$), fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
+    "dial_mle_mu": "DIAL-Ada, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "dial_mle_w": "DIAL-Ada ($W$), fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "oracle": "oracle weight",
-    "dial_rsel": "DIAL-Ada ($\\mu$), rank by GACV",
+    "dial_rsel": "DIAL-Ada, rank by GACV",
 }
 
 STYLE = {
@@ -48,6 +48,10 @@ STYLE = {
 }
 
 INK, INK_SOFT, GRID = "#0b0b0b", "#52514e", "#e4e3df"
+# Direction-of-merit arrows for the metric axes. Drawn in the label's own ink: the glyph already
+# says which way is better, and a green or red arrow would collide with DIAL-Anc and DIAL-Ada in
+# the same figure.
+BETTER = {"up": "\u2191", "down": "\u2193"}
 DATASET_LABEL = {"arena_33k": "Chatbot Arena", "mt_bench": "MT-Bench", "pandalm": "PandaLM"}
 DATASET_COLOR = {"arena_33k": "#2a78d6", "mt_bench": "#eb6834", "pandalm": "#1baf7a"}
 
@@ -57,6 +61,30 @@ RCPARAMS = {
     "legend.fontsize": 7.5, "axes.edgecolor": INK_SOFT, "axes.linewidth": 0.6, "pdf.fonttype": 42, "ps.fonttype": 42,
     "savefig.dpi": 300, "figure.dpi": 130,
 }
+
+
+def mark_better(ax, direction, target="ylabel", sep=3.5):
+    """Put a direction-of-merit arrow after `ax`'s y label or title: up = higher is better, down
+    = lower is better.
+
+    The arrow is placed from the rendered label, so call this once the layout is final (after
+    `tight_layout`) and before saving. An empty label is skipped, which is what shared-y panels
+    want.
+    """
+    arrow = BETTER[direction]
+    fig = ax.figure
+    label = ax.yaxis.label if target == "ylabel" else ax.title
+    if not label.get_text():
+        return
+    fig.canvas.draw()
+    bb = label.get_window_extent(fig.canvas.get_renderer())
+    inv = fig.transFigure.inverted()
+    if target == "ylabel":   # the label is rotated, so its end is at the top
+        x, y = inv.transform((bb.x0 + bb.width / 2, bb.y1 + sep))
+        fig.text(x, y, arrow, color=INK, ha="center", va="bottom", size=mpl.rcParams["axes.labelsize"])
+    else:
+        x, y = inv.transform((bb.x1 + sep, bb.y0))
+        fig.text(x, y, arrow, color=INK, ha="left", va="bottom", size=mpl.rcParams["axes.titlesize"])
 
 
 def plot_kwargs(method, with_marker=True):
@@ -69,7 +97,7 @@ def plot_kwargs(method, with_marker=True):
 
 # Aliases for the oracle variants stored by the two drivers (population-risk oracle on DIAL's and
 # DIAL-W's paths in the simulation; test-loss oracle on real data).
-for _k, _lab in (("oracle_mu", "oracle weight (DIAL-$\\mu$ path)"), ("oracle_w", "oracle weight (DIAL-$W$ path)"), ("oracle_test", "test-oracle weight")):
+for _k, _lab in (("oracle_mu", "oracle weight (DIAL-Ada path)"), ("oracle_w", "oracle weight (DIAL-$W$ path)"), ("oracle_test", "test-oracle weight")):
     LABEL[_k] = _lab
     STYLE[_k] = dict(STYLE["oracle"])
 STYLE["oracle_w"]["color"] = "#2a78d6"

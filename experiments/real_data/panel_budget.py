@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.ticker import NullFormatter, ScalarFormatter
 
-from experiments.style import DATASET_LABEL, GRID, LABEL, RCPARAMS, STYLE
+from experiments.style import DATASET_LABEL, GRID, LABEL, RCPARAMS, STYLE, mark_better
 
 from .robustness import ROOT
 from .robustness_plot import load
@@ -338,10 +338,11 @@ def calibration_figure(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALI
         ax.set_title(title, fontsize=8.5)
         ax.grid(color=GRID, lw=.5)
         ax.tick_params(length=2.5, labelsize=6.5)
-    axes[0].set_ylabel(METRIC['tau']['label'])
+    axes[0].set_ylabel(r"Kendall's $\tau$")
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower center', ncol=len(labels), frameon=False, bbox_to_anchor=(.5, -.12))
     fig.tight_layout()
+    mark_better(axes[0], 'up')   # after the layout: the arrow is placed from the rendered label
     return fig
 
 def main():
