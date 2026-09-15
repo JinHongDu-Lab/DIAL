@@ -13,7 +13,7 @@ No manuscript figure is replaced by this pilot.
 
 ```bash
 python -m experiments.real_data.intermediate_budget --seeds 5 --workers 8 --out /tmp/dial-intermediate-budget
-python -m experiments.real_data.panel_budget --figures intermediate --intermediate-root /tmp/dial-intermediate-budget
+# figures: run notebooks/3_real_data_calibration.ipynb
 ```
 
 Copy completed outputs into `results/intermediate_budget_pilot/` after validation.
@@ -27,7 +27,7 @@ Results are stored separately in `results/intermediate_budget/`.
 ```bash
 python -m experiments.real_data.intermediate_budget --seeds 50 --workers 8 --out /tmp/dial-intermediate-budget-50
 python -m experiments.real_data.intermediate_budget_validate --root /tmp/dial-intermediate-budget-50
-python -m experiments.real_data.panel_budget --figures intermediate --intermediate-root /tmp/dial-intermediate-budget-50
+# figures: run notebooks/3_real_data_calibration.ipynb
 python -m experiments.real_data.human_budget_graph --seeds 50 --out /tmp/dial-human-budget-graph
 ```
 

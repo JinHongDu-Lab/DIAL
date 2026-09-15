@@ -18,6 +18,7 @@ colours, for every figure of the simulation and the real-data study
 | `dial_mu` | DIAL-$\mu$ | joint weighted likelihood at rank r, human score aligned to mu only (`align="mu"`), GACV weight |
 | `dial_w` | DIAL-$W$ | same fit calibrating within W = [mu, V] (`align="W"`), GACV weight; drawn in the simulation figures, appendix diagnostic on real data |
 | `dial_nodeb` | DIAL-noPos | DIAL-$\mu$ without the order term |
+| `atc_btl` | AtC-BTL | stage-matched external baseline: the same human comparisons aggregated by BTL, then an isotonic (PAVA) projection of the LLM-only position-debiased consensus onto that ordering; main-text calibration figure only |
 
 Diagnostics (appendix only): `staged_w`, `dial_mle_w` (calibration within W = [mu, V]),
 `dial_mle_mu` (fixed weight n_L / n_H), `oracle_mu` / `oracle_test` (population-risk or
@@ -35,7 +36,11 @@ s_0 = alpha_0 mu (configs `main10`, `app20`, aligned with the consensus as on th
 benchmarks) or s_0 = W c_0 with c_V ~ N(0, 0.5^2) (`main10_mis`, appendix, where DIAL-$W$
 is needed). Rows: n_H at fixed n_L (theory lines (N-1)/(2 n_H), 1/(2 n_H), and
 (r+1)/(2 n_H) for the W-calibration); n_L at
-fixed n_H with pair-level LLM overdispersion. Metrics: excess human risk, Kendall tau
+fixed n_H with pair-level LLM overdispersion; and `pos` (config `main10_pos`, appendix),
+which sweeps sigma_pos, the within-judge pairwise spread of b_kij = b_k + delta_kij, at the
+main configuration's fixed budgets while every method keeps a constant b_k working model.
+A cell is (row, n_L, n_H, sigma_pos); rows written before sigma_pos existed default to 0.0,
+so the three budget configs group exactly as before. Metrics: excess human risk, Kendall tau
 (= 2 x pairwise sign accuracy - 1), 95% contrast coverage (cell-clustered sandwich), RMSE
 of b-hat; Spearman and MSE(S) in the appendix tables. Pooled and DIAL-noPos have no order
 parameter, so they report the RMSE of their implied b-hat = 0 (`b_is_zero` flag; b_sign_acc
@@ -45,7 +50,13 @@ omitted, being undefined for a zero estimate) and stay visible in that panel.
 python experiments/simulation/r1_main.py --config main10 --row both --seeds 0:50 --workers 6
 python experiments/simulation/r1_main.py --config app20  --row both --seeds 0:50 --workers 6
 python experiments/simulation/r1_main.py --config main10_mis --row both --seeds 0:50 --workers 6
+python experiments/simulation/r1_main.py --config main10_pos --row pos  --seeds 0:50 --workers 8
 ```
+
+The first three figures come from the notebook's `draw`; the sigma_pos figure
+(`fig_simu_pos_heterogeneity.pdf`, Figure F3) has its own three-panel layout and comes from the
+notebook's `pos_figure`. `r1_plot.py` only loads and aggregates: all figure code lives in the
+notebook.
 
 ## Real-data modes
 
@@ -146,8 +157,9 @@ tie outcome, display-order sign, and human outcome.
 
 ## Study 3: judge panels across budget regimes (`real_data/panel_budget.py`, `notebooks/3_real_data_calibration.ipynb`)
 
-Appendix G.4.2. One module draws all three figures on the same 3 x 3 grid (datasets x judge
-panels `small6` / `large6` / `all`), from two runs that share the same 50 record splits:
+Appendix G.4.2. `panel_budget.py` loads and aggregates; the notebook draws all three figures on
+the same 3 x 3 grid (datasets x judge panels `small6` / `large6` / `all`), from two runs that
+share the same 50 record splits:
 
 | Figure | Sweep | Fixed | Source |
 |---|---|---|---|
@@ -155,10 +167,10 @@ panels `small6` / `large6` / `all`), from two runs that share the same 50 record
 | `fig_panel_llm_budget.pdf` | LLM budget n_L | n_H = 300 / 80 / 60 (named in each row label) | robustness rows |
 | `fig_panel_intermediate_llm.pdf` | human budget n_H | n_L = 2000 / 160 / 100 | `results/intermediate_budget` |
 
-Each cell records both metrics of `METRIC`: excess held-out log loss and Kendall's tau against
-the held-out human ranking. Only the log-loss versions appear in the manuscript, so they are what
-`--metrics` draws by default; `--metrics excess,tau` (or `show(name, metrics=METRIC)` in the
-notebook) adds the `_tau` companions. They rank the methods the same way but weight the regimes
+Each cell records both metrics of the notebook's `METRIC`: excess held-out log loss and
+Kendall's tau against the held-out human ranking. Only the log-loss versions appear in the
+manuscript, so they are what `show(name)` draws by default; `show(name, metrics=METRIC)` adds the
+`_tau` companions. They rank the methods the same way but weight the regimes
 differently: log loss charges by the probability gap and by the number of test comparisons on a
 pair, so it is dominated by the low-budget regime where the adaptive fit is unstable, while tau
 charges every misordered pair equally.
@@ -166,18 +178,27 @@ charges every misordered pair equally.
 Methods are the shared panel of `experiments/style.py` -- Human, Cons-Cal, and DIAL-mu at its
 GACV-selected weight -- so this study draws the same estimators, colours and dashes as the
 other two. `panel_budget_data` and `intermediate_data` assert that every cell carries all 50
-seeds before anything is plotted.
+seeds before anything is plotted. The main-text calibration figure adds `atc_btl`, loaded by
+`panel_budget.atc_rows` from its own pass over the same splits and drawn under the human-only
+display rule (both share the pooled-human BTL stage, so both are shown only where that fit is
+finite in all 50 splits).
 
 ```bash
 python run_real_data.py --study robustness --sweep all --seeds 0:50 --workers 12
 python -m experiments.real_data.intermediate_budget --seeds 50 --workers 8 --out /tmp/dial-intermediate-budget-50
 python -m experiments.real_data.intermediate_budget_validate --root /tmp/dial-intermediate-budget-50
-python -m experiments.real_data.panel_budget --figures all        # or: human, llm, intermediate
+# figures: run notebooks/3_real_data_calibration.ipynb
+
+# AtC baseline of Figure 4: one add-on pass per source, appended to the same result directories
+python -m experiments.real_data.robustness --sweep budget --datasets arena_33k --panels all \
+    --methods atc_btl --seeds 0:50 --workers 8
+python -m experiments.real_data.intermediate_budget --seeds 50 --workers 8 \
+    --out results/intermediate_budget --methods atc_btl --datasets arena_33k --panels all --tag atc
 ```
 
-The notebook draws the same three figures inline, prepends the main-text calibration figure
-(`fig_real_calibration.pdf`, Figure 4), and adds the descriptive crossover table; the module
-forces the Agg backend only in its CLI, so both paths share one code path.
+The notebook draws the three appendix figures and the main-text calibration figure
+(`fig_real_calibration.pdf`, Figure 4), and adds the descriptive crossover table. It is the only
+place figure code lives, so there is no CLI that can drift away from it.
 
 ## Side-study runner
 

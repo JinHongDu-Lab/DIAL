@@ -17,7 +17,14 @@ def main():
         assert ad['lam']==ref['lam'];assert abs(ad['excess']-ref['excess'])<1e-12;assert abs(ad['ref_kendall']-ref['ref_kendall'])<1e-12
         if ad['margin_reason']=='within_margin':assert np.isinf(ad['lam']) and ad['endpoint_gacv_gap']<=1/ad['n_H']
         if ad['margin_reason']=='finite_gain':assert np.isfinite(ad['lam']) and ad['endpoint_gacv_gap']>1/ad['n_H']
-    x=pd.read_csv(root/'rows.csv');assert len(x)==171*seeds
+    x=pd.read_csv(root/'rows.csv')
+    # rows.csv also carries later add-on passes over the same cells (their own jobs_<tag>.jsonl,
+    # e.g. the AtC baseline); the design checks below cover this run's own three methods
+    DESIGN_METHODS=['consensus_cal','dial_mu','dial_margin_1']
+    addon=x[~x.method.isin(DESIGN_METHODS)];x=x[x.method.isin(DESIGN_METHODS)]
+    assert len(x)==171*seeds
+    if not addon.empty:
+        assert addon.groupby(['dataset','panel','level','n_H_level','method']).seed.apply(lambda z:set(z)==set(range(seeds))).all()
     keys=['dataset','panel','level','n_H_level','method','seed'];assert not x.duplicated(keys).any()
     assert x.groupby(keys[:-1]).seed.apply(lambda z:set(z)==set(range(seeds))).all()
     assert x.groupby('dataset').n_L.unique().apply(list).to_dict()=={'arena_33k':[2000],'mt_bench':[160],'pandalm':[100]}
@@ -28,11 +35,11 @@ def main():
         delta=float((y.excess_new-y.excess_old).abs().max());assert delta<1e-12
         checks.append(dict(source=name,matched_rows=len(y),maximum_loss_difference=delta))
     diag=json.loads((root/'diagnostics.json').read_text());assert diag['exception_rows']==0
-    bymethod=x.groupby('method').apply(lambda g:pd.Series(dict(nonconverged=int((g.converged==False).sum()),irregular=int((g.selected_regular==False).sum()),fallback=int((g.margin_reason=='all_irregular_fallback').sum()))),include_groups=False)
+    bymethod=pd.concat([x,addon]).groupby('method').apply(lambda g:pd.Series(dict(nonconverged=int((g.converged==False).sum()),irregular=int((g.selected_regular==False).sum()),fallback=int((g.margin_reason=='all_irregular_fallback').sum()))),include_groups=False)
     bymethod.to_csv(root/'fit_diagnostics.csv')
-    report=dict(cells=len(jobs),rows=len(x),seeds=seeds,paired_checks=checks,decision_formula_verified=True,candidate_predictions_reused=True,diagnostics=diag)
+    report=dict(cells=len(jobs),rows=len(x),addon_rows=len(addon),seeds=seeds,paired_checks=checks,decision_formula_verified=True,candidate_predictions_reused=True,diagnostics=diag)
     (root/'validation.json').write_text(json.dumps(report,indent=2)+'\n')
-    paths=['intermediate_budget.py','panel_budget.py','intermediate_budget_validate.py','endpoint_margin.py','robustness.py','human_budget_graph.py']
+    paths=['intermediate_budget.py','intermediate_budget_validate.py','endpoint_margin.py','robustness.py','human_budget_graph.py']
     (root/'source_hashes.json').write_text(json.dumps({p:hashlib.sha256((Path(__file__).parent/p).read_bytes()).hexdigest() for p in paths},indent=2)+'\n')
     print(json.dumps(report,indent=2));print(bymethod.to_string())
 

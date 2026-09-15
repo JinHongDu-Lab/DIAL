@@ -43,7 +43,7 @@ Compute outside the Dropbox-synced tree and copy completed, validated artifacts 
 
 ```bash
 python -m experiments.real_data.endpoint_margin --seeds 50 --workers 8 --panels all small6 large6 --out /tmp/dial-endpoint-margin-run
-python -m experiments.real_data.panel_budget --figures small,llm --margin-root results/endpoint_margin_appendix --out figures
+# figures: run notebooks/3_real_data_calibration.ipynb
 ```
 
 The figure exporter verifies 50 matched seeds per method and setting and plots the fixed c=1 rule as DIAL-mu, with original GACV as DIAL-mu (raw).
