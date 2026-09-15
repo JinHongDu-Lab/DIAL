@@ -212,13 +212,18 @@ def generate_plan_calibration(V, c_mu=1.0, c_v_sd=0.5, random_seed=42):
     return float(c_mu), c_v_sd * rng.normal(size=r) if r > 0 else np.zeros(0)
 
 
-def generate_random_llm_comparisons(S, b, total_comparisons, random_seed=42, swap_fraction=0.5, pair_weights=None, overdispersion=0.0):
+def generate_random_llm_comparisons(S, b, total_comparisons, random_seed=42, swap_fraction=0.5, pair_weights=None, overdispersion=0.0, position_heterogeneity=0.0):
     """
     Draw `total_comparisons` LLM records (k, i, j, y, a) with judge uniform, pair
     drawn from `pair_weights` (uniform if None), and a = +1 (canonical i first)
     with probability 1 - swap_fraction, a = -1 with probability swap_fraction.
     swap_fraction = 0 gives a design in which z_k is constant and the position
     effect is not identified (Cond. LLM design fails).
+
+    `position_heterogeneity` = sigma_pos > 0 replaces the constant b_k by a pair-varying
+    b_kij = b_k + delta_kij, with delta centered within judge over pairs and of pairwise
+    standard deviation sigma_pos, so judge k's average pair effect stays exactly b_k while the
+    constant-b working model is misspecified.
     """
     S = np.asarray(S, dtype=float)
     b = np.asarray(b, dtype=float)
@@ -232,7 +237,13 @@ def generate_random_llm_comparisons(S, b, total_comparisons, random_seed=42, swa
     pair = rng.choice(n_pairs, size=total_comparisons, p=pair_weights)
     i, j = tri_i[pair], tri_j[pair]
     a = np.where(rng.uniform(size=total_comparisons) < swap_fraction, -1, 1)
-    eta = S[k, i] - S[k, j] + a * b[k]
+    b_eff = b[k]
+    if position_heterogeneity > 0:
+        d = rng.normal(size=(K, n_pairs))
+        d = d - d.mean(axis=1, keepdims=True)
+        d = position_heterogeneity * d / d.std(axis=1, ddof=0, keepdims=True)
+        b_eff = b_eff + d[k, pair]
+    eta = S[k, i] - S[k, j] + a * b_eff
     if overdispersion > 0:
         # pair-level idiosyncrasy of judge k on pair (i, j), fixed across repeated queries:
         # eta += eps_kij, eps ~ N(0, overdispersion^2). The LLM likelihood is then misspecified

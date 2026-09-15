@@ -3,6 +3,7 @@
 Rows of the main figure:
   row "nH": x = human budget n_H at fixed abundant n_L      (limited human supervision; theory lines)
   row "nL": x = LLM budget n_L at fixed moderate n_H        (adaptive weighting under LLM overdispersion)
+  row "pos": x = sigma_pos at fixed budgets                 (pair-varying position effects vs. the constant-b model)
 
 Data-generating process (plan Section 2 of code/plan/2026-09-02-main-experiments-plan.md, revised
 2026-09-07): LLM side S = gamma mu^T + U V^T at rank r with judge-specific position effects; human
@@ -71,15 +72,23 @@ CONFIGS = {
     # appendix: human target with a component in col(V) (the pre-2026-09-07 DGP), where the W-calibration is needed
     "main10_mis": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.5,
                        sigma_L=dict(nH=0.0, nL=1.0), n_H_grid=[100, 200, 400, 800, 1600], n_L_grid=[400, 800, 1600, 3200, 6400, 12800]),
+    # appendix: pair-varying position effects b_kij = b_k + delta_kij against the constant-b
+    # working model; the cell grid is sigma_pos at the main configuration's fixed budgets
+    "main10_pos": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0,
+                       sigma_L=dict(pos=0.0), sigma_pos_grid=[0.0, 0.25, 0.5, 0.75, 1.0],
+                       n_H_grid=[800], n_L_grid=[20000]),
 }
 METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_mu", "oracle_w"]
 
 
 def cells_for(cfg, row):
+    """Cells of one row as (n_L, n_H, sigma_pos); only the `pos` row varies sigma_pos."""
     c = CONFIGS[cfg]
+    if row == "pos":
+        return [(c["n_L_fixed"], c["n_H_fixed"], sp) for sp in c["sigma_pos_grid"]]
     if row == "nH":
-        return [(c["n_L_fixed"], nH) for nH in c["n_H_grid"]]
-    return [(nL, c["n_H_fixed"]) for nL in c["n_L_grid"]]
+        return [(c["n_L_fixed"], nH, 0.0) for nH in c["n_H_grid"]]
+    return [(nL, c["n_H_fixed"], 0.0) for nL in c["n_L_grid"]]
 
 
 def _cover(truth, ci):
@@ -87,12 +96,13 @@ def _cover(truth, ci):
 
 
 def run_cell(args):
-    cfg_name, row, n_L, n_H, seed = args
+    cfg_name, row, n_L, n_H, sigma_pos, seed = args
     c = CONFIGS[cfg_name]
     N, K, r = c["N"], c["K"], c["r"]
     rho = c.get("swap_fraction", 0.5)
     sigma_L = c.get("sigma_L", {}).get(row, 0.0)
-    base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_H=n_H, seed=seed, swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
+    base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_H=n_H, sigma_pos=float(sigma_pos), seed=seed,
+                swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
     t0 = time.perf_counter()
     out = []
 
@@ -101,7 +111,7 @@ def run_cell(args):
     c_mu, c_v = generate_plan_calibration(V, c_v_sd=c.get("c_v_sd", 0.0), random_seed=seed + 2)
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
-    llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3, swap_fraction=rho, overdispersion=sigma_L)
+    llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3, swap_fraction=rho, overdispersion=sigma_L, position_heterogeneity=sigma_pos)
     hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
@@ -243,14 +253,14 @@ def existing_keys(path):
             for line in f:
                 d = json.loads(line)
                 row = "nH" if d["row"] == "n0" else d["row"]              # pre-rename rows.jsonl stored row "n0" and key "n_0"
-                keys.add((row, d["n_L"], d.get("n_H", d.get("n_0")), d["seed"]))
+                keys.add((row, d["n_L"], d.get("n_H", d.get("n_0")), float(d.get("sigma_pos", 0.0)), d["seed"]))
     return keys
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="main10", choices=sorted(CONFIGS))
-    p.add_argument("--row", default="both", choices=["nH", "nL", "both"])
+    p.add_argument("--row", default="both", choices=["nH", "nL", "pos", "both"])
     p.add_argument("--seeds", default="0:10", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)
@@ -260,7 +270,8 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)
     rows = ["nH", "nL"] if a.row == "both" else [a.row]
-    jobs = [(a.config, row, nL, nH, s) for row in rows for (nL, nH) in cells_for(a.config, row) for s in range(s0, s1) if (row, nL, nH, s) not in done]
+    jobs = [(a.config, row, nL, nH, sp, s) for row in rows for (nL, nH, sp) in cells_for(a.config, row) for s in range(s0, s1)
+            if (row, nL, nH, sp, s) not in done]
     print(f"{len(jobs)} cells to run ({len(done)} already stored) -> {out}", flush=True)
     t0 = time.perf_counter()
     with ProcessPoolExecutor(max_workers=a.workers) as ex, open(out, "a") as f:
