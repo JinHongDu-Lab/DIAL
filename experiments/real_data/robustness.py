@@ -16,7 +16,9 @@ human-fitted scale: the lambda = infinity endpoint of DIAL); DIAL (`dial_mu`: jo
 weighted likelihood at rank r with the human score aligned to mu only, GACV weight);
 DIAL-noPos (DIAL without the order term). Diagnostics: `staged_w`, `dial_w`,
 `dial_mle_mu`, `dial_mle_w` (W-calibration and fixed-weight variants), `oracle_test`
-(test-loss-minimizing weight on DIAL's path), `dial_rsel` ((r, lambda) by GACV).
+(test-loss-minimizing weight on DIAL's path), `dial_rsel` ((r, lambda) by GACV). `atc_btl` is the
+stage-matched external comparison of AtC: the same human comparisons aggregated by BTL, then an
+isotonic projection of the LLM-only position-debiased consensus onto that ordering.
 
 Rows append to results/real_robustness/<dataset>/rows.jsonl keyed by
 (sweep, panel, kind, level, n_H, seed). Aggregation: robustness_plot.py; figures:
@@ -45,7 +47,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import kendalltau
 
-from dial_judge.baselines import fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
+from dial_judge.baselines import fit_atc_btl, fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
 from dial_judge.benchmarks import fit_dial
 from dial_judge.dial_model import fit_human_calibration
 from dial_judge.evaluate import heldout_log_loss, score_accuracy
@@ -69,7 +71,7 @@ def _display_path(path: Path) -> Path:
 
 SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest")
 NOISE_KINDS = ("random", "position", "anti")
-METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
+METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "atc_btl", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
 DATASET_CODE = {"arena_33k": 1, "mt_bench": 2, "pandalm": 3}
 
 
@@ -412,13 +414,21 @@ def run_cell(job):
 
     # ---- Cons-Cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
     st_mu = None
-    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu"):
+    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu", "atc_btl"):
         try:
             st_mu = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
             if want("consensus_cal"):
                 rec("consensus_cal", st_mu["s_H"], **lam_fields(np.inf), alpha=float(st_mu["alpha_H"]), **flags(st_mu), **inj(st_mu))
         except Exception as e:  # noqa: BLE001
             fail("consensus_cal", e)
+    # ---- AtC (external, stage-matched): human BTL ranking, then isotonic calibration of mu
+    if st_mu is not None and want("atc_btl"):
+        try:
+            # the stage-1 aggregation is the `human_only` fit, so `human_only_exists` of `base`
+            # is also AtC's availability flag: below it the ordering comes from a bounded maximizer
+            rec("atc_btl", fit_atc_btl(N, st_mu["mu"], pairs)["s_H"])
+        except Exception as e:  # noqa: BLE001
+            fail("atc_btl", e)
     if st_mu is not None and want("dial_mu", "oracle_test"):
         try:
             sel = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_mu, lambda_grid=lam_grid, return_all=True, align="mu")
@@ -579,8 +589,18 @@ def main(argv=None):
     p.add_argument("--clean-fit", action="store_true")
     p.add_argument("--ja", action="store_true", help="run the JA-Ranking reanalysis (figure A1) and exit")
     p.add_argument("--methods", default=None, help="comma-separated method keys: compute only these, for cells that lack them (spectest skipped)")
+    p.add_argument("--datasets", default=None, help="comma-separated datasets: restrict every sweep to these")
+    p.add_argument("--panels", default=None, help="comma-separated judge panels: restrict every sweep to these")
     a = p.parse_args(argv)
     cfg = load_config(a.config)
+    # `--datasets` / `--panels` narrow every sweep's own grid, so a method can be added to one
+    # dataset or judge panel without re-walking the whole design.
+    for key, keep in (("datasets", a.datasets), ("panels", a.panels)):
+        if keep:
+            keep = [x.strip() for x in keep.split(",")]
+            for sw in cfg["sweeps"].values():
+                if key in sw:
+                    sw[key] = [v for v in sw[key] if v in keep]
     root = Path(a.out) if a.out else RESULTS_ROOT
     if a.select_rank:
         for d in cfg["study"]["datasets"]:

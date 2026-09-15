@@ -25,7 +25,7 @@ METHOD_STATUS = {
     "swap_probability_average": False,
     "paired_order_logit_average": False,
     "unstructured_btl_svd_calibration": False,
-    "atc": False,
+    "atc": True,
 }
 
 
@@ -35,6 +35,43 @@ def fit_human_only_btl(N, human_pairs, maxiter=1000):
     return {
         "method": "human_only_btl",
         "s_H": score,
+        "fit_info": {"converged": True},
+    }
+
+
+def _pava(values):
+    """Pool-adjacent-violators: the nondecreasing least-squares fit of `values` (unit weights)."""
+    level, weight = [], []
+    for v in np.asarray(values, dtype=float):
+        level.append(float(v))
+        weight.append(1)
+        while len(level) > 1 and level[-2] > level[-1]:
+            w = weight[-2] + weight[-1]
+            level[-2] = (weight[-2] * level[-2] + weight[-1] * level[-1]) / w
+            weight[-2] = w
+            level.pop()
+            weight.pop()
+    return np.repeat(np.asarray(level, dtype=float), weight)
+
+
+def fit_atc_btl(N, mu, human_pairs, maxiter=1000):
+    """AtC: aggregate the human comparisons into a ranking, then isotonic-calibrate `mu` to it.
+
+    Stage 1 is the same unrestricted centered BTL fit as ``fit_human_only_btl``, whose induced
+    ordering is the consensus ranking; stage 2 is the Euclidean projection of the predictive score
+    `mu` onto the monotone cone of that ordering, computed by PAVA. The result is centered, so it
+    lives on the same scale as every other estimator of the study. ``mle_exists`` is left to the
+    caller: when the stage-1 MLE is not finite the reported fit is the bounded maximizer.
+    """
+    s_human = fit_centered_btl_from_pairs(N, human_pairs, maxiter=maxiter)
+    order = np.argsort(s_human, kind="stable")          # ascending human rank
+    mu = np.asarray(mu, dtype=float)
+    fitted = np.empty(N, dtype=float)
+    fitted[order] = _pava(mu[order])
+    return {
+        "method": "atc",
+        "s_H": fitted - fitted.mean(),
+        "s_human_stage1": s_human,
         "fit_info": {"converged": True},
     }
 

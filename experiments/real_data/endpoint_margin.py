@@ -44,7 +44,10 @@ def choose_endpoint_margin(path, n_h, c, fallback=math.inf):
 def summarize(root):
     """Aggregate one run's cells into rows.csv, summary.csv, and diagnostics.json."""
     root = Path(root)
-    rows = [r for line in (root / 'jobs.jsonl').read_text().splitlines() for r in json.loads(line)['rows']]
+    # every `jobs*.jsonl` of the directory, so a later pass that adds a method to the same cells
+    # (written to its own file, e.g. `jobs_atc.jsonl`) is aggregated with the original run
+    rows = [r for path in sorted(root.glob('jobs*.jsonl'))
+            for line in path.read_text().splitlines() for r in json.loads(line)['rows']]
     x = pd.DataFrame(rows)
     x.to_csv(root / 'rows.csv', index=False)
 

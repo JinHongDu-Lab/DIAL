@@ -25,6 +25,7 @@ LABEL = {
     "consensus_cal": "DIAL-Anc",
     "dial_mu": "DIAL-Ada",
     "dial_nodeb": "DIAL-noPos",
+    "atc_btl": "AtC",
     "dial_w": "DIAL-Ada ($W$)",
     "staged_w": "DIAL-Anc-$W$ ($\\lambda=\\infty$, $W$)",
     "dial_mle_mu": "DIAL-Ada, fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
@@ -39,6 +40,8 @@ STYLE = {
     "consensus_cal": dict(color="#1baf7a", ls="-", marker="v", lw=1.2),
     "dial_mu": dict(color="#c0392b", ls="-", marker="o", lw=2.0),
     "dial_nodeb": dict(color="#eb6834", ls=":", marker="^", lw=1.2),
+    # stage-matched external comparison for the human-calibration stage (Figure 4 only)
+    "atc_btl": dict(color="#b8860b", ls="--", marker="D", lw=1.1),
     "dial_w": dict(color="#2a78d6", ls="-", marker="s", lw=1.2),
     "staged_w": dict(color="#7fb2e5", ls="--", marker="D", lw=1.0),
     "dial_mle_mu": dict(color="#e59c9c", ls="-.", marker="D", lw=0.9),
@@ -60,7 +63,7 @@ RCPARAMS = {
     "font.family": "serif", "font.serif": ["Times New Roman", "Nimbus Roman", "DejaVu Serif"],
     "font.size": 8, "axes.labelsize": 8.5, "axes.titlesize": 9, "xtick.labelsize": 7.5, "ytick.labelsize": 7.5,
     "legend.fontsize": 7.5, "axes.edgecolor": INK_SOFT, "axes.linewidth": 0.6, "pdf.fonttype": 42, "ps.fonttype": 42,
-    "savefig.dpi": 300, "figure.dpi": 130,
+    "savefig.dpi": 300, "figure.dpi": 130, "savefig.pad_inches": 0,
 }
 
 

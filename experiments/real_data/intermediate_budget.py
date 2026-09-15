@@ -14,13 +14,16 @@ PURPOSE = ("Fixed intermediate human-budget sweep; LLM budgets fixed to middle G
            "inspecting outcomes; c=1 fixed; no test-based selection.")
 
 
-def build_config():
+def build_config(methods=None, datasets=None, panels=None):
+    """The run's design; `methods`, `datasets` and `panels` narrow it for a later add-on pass."""
     cfg = rb.load_config()
-    cfg["_only_methods"] = ["consensus_cal", "dial_mu"]
-    cfg["_gacv_endpoint_margins"] = [1.0]
+    cfg["_only_methods"] = list(methods) if methods else ["consensus_cal", "dial_mu"]
+    if not methods:
+        cfg["_gacv_endpoint_margins"] = [1.0]
     sweep = cfg["sweeps"]["llm_budget"]
-    sweep["panels"] = PANELS
-    sweep["levels"] = LLM_LEVELS
+    sweep["panels"] = list(panels) if panels else PANELS
+    sweep["levels"] = {d: v for d, v in LLM_LEVELS.items() if datasets is None or d in datasets}
+    sweep["datasets"] = [d for d in sweep["datasets"] if datasets is None or d in datasets]
     sweep["n_H_grid"] = cfg["sweeps"]["budget"]["levels"]
     return cfg
 
@@ -30,18 +33,24 @@ def main():
     p.add_argument("--seeds", type=int, default=5)
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--out", type=Path, default=Path("/tmp/dial-intermediate-budget"))
+    p.add_argument("--methods", default=None, help="comma-separated method keys for an add-on pass over the same cells")
+    p.add_argument("--datasets", default=None, help="comma-separated datasets (default: all three)")
+    p.add_argument("--panels", default=None, help="comma-separated judge panels (default: all three)")
+    p.add_argument("--tag", default=None, help="suffix of the pass's own jobs/design files, e.g. `atc`")
     a = p.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
+    split = lambda v: [x.strip() for x in v.split(",")] if v else None
 
-    cfg = build_config()
-    write_design(a.out / "design.json", dict(seeds=a.seeds, config=cfg, purpose=PURPOSE))
+    cfg = build_config(split(a.methods), split(a.datasets), split(a.panels))
+    suffix = f"_{a.tag}" if a.tag else ""
+    write_design(a.out / f"design{suffix}.json", dict(seeds=a.seeds, config=cfg, purpose=PURPOSE))
 
     def key_of(job):
         return (job[0],) + rb.job_key(job)
 
-    done = completed_keys(a.out / "jobs.jsonl")
+    done = completed_keys(a.out / f"jobs{suffix}.jsonl")
     jobs = [j for j in rb.jobs_for("llm_budget", cfg, range(a.seeds)) if key_of(j) not in done]
-    run_keyed_jobs(jobs, rb.run_cell, a.out / "jobs.jsonl", key_of, workers=a.workers)
+    run_keyed_jobs(jobs, rb.run_cell, a.out / f"jobs{suffix}.jsonl", key_of, workers=a.workers)
     summarize(a.out)
 
 

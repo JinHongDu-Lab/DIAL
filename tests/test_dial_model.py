@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from dial_judge.baselines import (
+    fit_atc_btl,
     fit_consensus_only_calibrated,
     fit_human_only_btl,
     fit_staged_structured_calibration,
@@ -67,8 +68,25 @@ def test_available_endpoints_return_human_scores(small_study):
 
 
 def test_unavailable_method_registry_is_explicit():
-    assert "atc" in unavailable_methods()
+    assert "atc" not in unavailable_methods()
     assert "paired_order_logit_average" in unavailable_methods()
+
+
+def test_atc_is_isotonic_in_the_human_ordering_and_centered():
+    """AtC keeps the human-aggregated ordering and moves `mu` as little as possible to reach it."""
+    N = 5
+    truth = np.array([-1.0, -0.5, 0.0, 0.5, 1.0])
+    pairs = [(i, j, 200.0, 200.0 / (1.0 + np.exp(-(truth[i] - truth[j]))))
+             for i in range(N) for j in range(i + 1, N)]
+    mu = np.array([0.0, 2.0, -1.0, 3.0, 1.0])            # deliberately out of the human order
+    fit = fit_atc_btl(N, mu, pairs)
+    s_hat, order = fit["s_H"], np.argsort(fit["s_human_stage1"])
+    assert np.allclose(fit["s_human_stage1"].argsort(), np.arange(N))   # stage 1 recovers the ordering
+    assert np.all(np.diff(s_hat[order]) >= -1e-12)
+    assert abs(s_hat.mean()) < 1e-12
+    # an already-isotonic score is returned unchanged up to centering
+    fit0 = fit_atc_btl(N, truth, pairs)
+    assert np.allclose(fit0["s_H"], truth - truth.mean())
 
 
 @pytest.mark.slow

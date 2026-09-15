@@ -12,6 +12,7 @@ Metrics in evaluate.py: MSE, Spearman, NDCG, Coverage, Sign accuracy (human).
 from .benchmarks import fit_hja, fit_dial, fit_dial_joint, fit_dial_gacv, fit_ht_hja_joint
 from .baselines import (
     METHOD_STATUS,
+    fit_atc_btl,
     fit_consensus_only_calibrated,
     fit_human_only_btl,
     fit_llm_consensus,
@@ -36,6 +37,7 @@ __all__ = [
     "fit_dial_gacv",
     "fit_ht_hja_joint",
     "METHOD_STATUS",
+    "fit_atc_btl",
     "fit_consensus_only_calibrated",
     "fit_human_only_btl",
     "fit_llm_consensus",
