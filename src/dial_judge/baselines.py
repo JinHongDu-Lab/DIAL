@@ -93,12 +93,13 @@ def _calibrated_result(method, hja_fit, human_pairs, consensus_only=False, maxit
         V = np.zeros((mu.size, 0), dtype=float)
     else:
         V = np.asarray(hja_fit["V"], dtype=float)
-    alpha, a = fit_human_calibration(mu, V, human_pairs, maxiter=maxiter)
+    alpha, a, cal_info = fit_human_calibration(mu, V, human_pairs, maxiter=maxiter, return_info=True)
     design = calibration_design(mu, V)
     coefficients = np.concatenate([[alpha], a])
     return {
         **hja_fit,
         "method": method,
+        "cal_info": cal_info,
         "alpha_H": alpha,
         "a": a,
         "W": design,

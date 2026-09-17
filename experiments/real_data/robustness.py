@@ -310,7 +310,8 @@ def per_dataset(value, dataset):
     return value[dataset] if isinstance(value, dict) else value
 
 
-def run_cell(job):
+def build_cell(job):
+    """The data of one cell exactly as `run_cell` fits it (shared with the boundary audit)."""
     dataset, sweep, panel_name, kind, level, n_H_req, seed, cfg = job
     scfg, dcfg, swcfg = cfg["study"], cfg[dataset], cfg["sweeps"][sweep]
     panel = restrict_panel(get_panel(dataset, cfg), None if panel_name == "all" else cfg["panels"][panel_name])
@@ -318,7 +319,6 @@ def run_cell(job):
     rng_split = np.random.default_rng([int(seed), code, 1])
     rng_budget = np.random.default_rng([int(seed), code, 2])
     rng_design = np.random.default_rng([int(seed), code, 3])
-    t0 = time.perf_counter()
 
     rho = float(swcfg.get("rho_swap", 1.0))
     m, n_L_req = 0, -1
@@ -357,6 +357,17 @@ def run_cell(job):
     mults = scfg.get("lambda_multipliers")
     lam_grid = [float(mm) * n_L / n_H_actual for mm in mults] if mults else None
     r_max = int(min(scfg.get("rank_select_max", 2), K - 1, N - 2))
+    return dict(scfg=scfg, N=N, K=K, K_real=K_real, K_dropped=K_dropped, A=A, pairs=pairs, test_recs=test_recs, hum_test=hum_test, hum_train=hum_train,
+                llm=llm, cal=cal, n_L=n_L, n_H_actual=n_H_actual, lam_grid=lam_grid, r_max=r_max, rho=rho, m=m)
+
+
+def run_cell(job):
+    dataset, sweep, panel_name, kind, level, n_H_req, seed, cfg = job
+    t0 = time.perf_counter()
+    cell = build_cell(job)
+    scfg, N, K, K_real, K_dropped, A, pairs, test_recs = (cell[k] for k in ("scfg", "N", "K", "K_real", "K_dropped", "A", "pairs", "test_recs"))
+    hum_test, hum_train, llm, cal, n_L, n_H_actual = (cell[k] for k in ("hum_test", "hum_train", "llm", "cal", "n_L", "n_H_actual"))
+    lam_grid, r_max, rho, m = (cell[k] for k in ("lam_grid", "r_max", "rho", "m"))
 
     ref = fit_human_only_btl(N, human_pairs(hum_test))["s_H"]
     floor = heldout_log_loss(ref, test_recs)

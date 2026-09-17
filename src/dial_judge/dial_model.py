@@ -34,6 +34,7 @@ from .hja import (
     reduce_item_block,
     reduce_judge_block,
     accept_block_step,
+    boundary_activity,
     chart_bounds,
     count_at_bound,
     count_chart_at_bound,
@@ -109,7 +110,7 @@ def human_nll_and_grad(alpha, a, mu, V, pair_arrays):
     return loss, grad_alpha, grad_a, grad_mu, grad_V
 
 
-def fit_human_calibration(mu, V, pairs, initial=None, maxiter=1000):
+def fit_human_calibration(mu, V, pairs, initial=None, maxiter=1000, return_info=False):
     mu = np.asarray(mu, dtype=float)
     V = np.asarray(V, dtype=float)
     r = V.shape[1]
@@ -128,6 +129,7 @@ def fit_human_calibration(mu, V, pairs, initial=None, maxiter=1000):
         return loss, np.concatenate([[grad_alpha], grad_a])
 
     result = minimize(objective, x0=x0, method="L-BFGS-B", jac=True, options={"maxiter": maxiter, "gtol": 1e-8})
+    bounds = None
     if not result.success:
         # Line-search breakdown happens when the calibration likelihood is separated (alpha or a
         # runs off) or flat to machine precision. Retry on a box that keeps the calibrated score
@@ -141,6 +143,11 @@ def fit_human_calibration(mu, V, pairs, initial=None, maxiter=1000):
             pg = np.linalg.norm(projected_gradient(result.x, result.jac, bounds)) / max(n_h, 1.0)
             if pg > 1e-6:
                 raise RuntimeError(f"human calibration fit failed: {result.message} (projected gradient {pg:.2e})")
+    if return_info:
+        # the unconstrained fit has no box; the retry box bounds the calibrated score, not the chart
+        info = {"cal_box_used": bool(bounds is not None), "max_abs_coord": float(np.max(np.abs(result.x)))}
+        info["boundary_cal"] = bool(boundary_activity(result.x, bounds, {})["boundary_any"]) if bounds is not None else False
+        return float(result.x[0]), result.x[1:].copy(), info
     return float(result.x[0]), result.x[1:].copy()
 
 
@@ -209,6 +216,12 @@ def polish_joint_fit(gamma, mu, U, V, b, alpha, a, n_ijk, y_ijk, n_order, y_orde
     info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "total_loss": float(res.fun),
             "b_at_bound": count_at_bound(b) if use_order else 0, "n_at_bound": count_chart_at_bound(res.x, bounds),
             "max_abs_S": float(np.max(np.abs(S))), "max_gamma": float(np.max(np.abs(gamma)))}
+    # chart layout of pack_reduced: gamma_red, U_red, [b], mu_red, V_red, alpha, a
+    n_judge, n_b = (K - 1) * (r + 1), (K if use_order else 0)
+    n_cal = 1 + np.atleast_1d(a).size
+    idx = np.arange(res.x.size)
+    info.update(boundary_activity(res.x, bounds, {"b": idx[n_judge: n_judge + n_b], "llm_other": np.concatenate([idx[:n_judge], idx[n_judge + n_b: idx.size - n_cal]]),
+                                                  "cal": idx[idx.size - n_cal:]}))
     return gamma, mu, U, V, (b if use_order else np.zeros(K)), alpha, a, info
 
 

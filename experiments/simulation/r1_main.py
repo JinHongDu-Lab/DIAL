@@ -95,17 +95,14 @@ def _cover(truth, ci):
     return float(np.mean((truth >= ci["lower"]) & (truth <= ci["upper"])))
 
 
-def run_cell(args):
-    cfg_name, row, n_L, n_H, sigma_pos, seed = args
+def simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed):
+    """The truth and the sampled comparisons of one cell (shared with the boundary audit)."""
     c = CONFIGS[cfg_name]
     N, K, r = c["N"], c["K"], c["r"]
     rho = c.get("swap_fraction", 0.5)
     sigma_L = c.get("sigma_L", {}).get(row, 0.0)
     base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_H=n_H, sigma_pos=float(sigma_pos), seed=seed,
                 swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
-    t0 = time.perf_counter()
-    out = []
-
     mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=seed)
     b = generate_plan_position_effects(K, random_seed=seed + 1)
     c_mu, c_v = generate_plan_calibration(V, c_v_sd=c.get("c_v_sd", 0.0), random_seed=seed + 2)
@@ -116,6 +113,16 @@ def run_cell(args):
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
     pairs = pool_pairs(hum)
+    return dict(N=N, K=K, r=r, base=base, b=b, S=S, s0=s0, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, pairs=pairs)
+
+
+def run_cell(args):
+    cfg_name, row, n_L, n_H, sigma_pos, seed = args
+    t0 = time.perf_counter()
+    out = []
+    cell = simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed)
+    N, K, r, base, b, S, s0, pairs = (cell[k] for k in ("N", "K", "r", "base", "b", "S", "s0", "pairs"))
+    n_ijk, y_ijk, n_order, y_order = (cell[k] for k in ("n_ijk", "y_ijk", "n_order", "y_order"))
     D = pairwise_contrast_matrix(N)
     tc = D @ s0
 

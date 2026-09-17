@@ -176,6 +176,22 @@ def count_chart_at_bound(x, bounds):
     return int(np.sum((x <= lo + _BOUND_TOL) | (x >= hi - _BOUND_TOL)))
 
 
+def boundary_activity(x, bounds, blocks):
+    """Box activity of the optimizer's final chart point, per parameter block.
+
+    `blocks` maps a block name to the index array of its coordinates in `x`. Uses the same
+    active-bound tolerance as `count_chart_at_bound` and `projected_gradient`. Returns
+    `boundary_<name>` flags, `boundary_any`, and the largest absolute chart coordinate.
+    """
+    x = np.asarray(x, dtype=float)
+    lo = np.array([-np.inf if b[0] is None else b[0] for b in bounds]); hi = np.array([np.inf if b[1] is None else b[1] for b in bounds])
+    active = (x <= lo + _BOUND_TOL) | (x >= hi - _BOUND_TOL)
+    out = {f"boundary_{name}": bool(active[np.asarray(idx, dtype=int)].any()) for name, idx in blocks.items()}
+    out["boundary_any"] = bool(active.any())
+    out["max_abs_coord"] = float(np.max(np.abs(x))) if x.size else 0.0
+    return out
+
+
 def accept_block_step(result, f0, label):
     """A proximal block update need not be solved exactly: accept L-BFGS-B's iterate whenever it
     did not increase the objective (its line search guarantees descent), and report whether the
@@ -512,6 +528,10 @@ def polish_llm_fit(gamma, mu, U, V, b, n_ijk, y_ijk, n_order=None, y_order=None,
     info = {"polish_nit": int(res.nit), "polish_grad_norm": grad_norm, "polish_converged": bool(grad_norm <= 1e-5), "nll": float(res.fun),
             "b_at_bound": count_at_bound(bb) if use_order else 0, "n_at_bound": count_chart_at_bound(res.x, bounds),
             "max_abs_S": float(np.max(np.abs(S))), "max_gamma": float(np.max(np.abs(g)))}
+    n_b = K if use_order else 0
+    idx = np.arange(z0.size)
+    info.update(boundary_activity(res.x, bounds, {"b": idx[n_g + n_U: n_g + n_U + n_b],
+                                                   "llm_other": np.concatenate([idx[: n_g + n_U], idx[n_g + n_U + n_b:]])}))
     return g, m, Uu, Vv, (bb if use_order else np.zeros(K)), info
 
 
@@ -701,6 +721,8 @@ def fit_rank0_model(N, K, n_ijk, y_ijk, maxiter=2000, n_order=None, y_order=None
     gamma, mu, U, V = reanchor(gamma, mu, U, V)
     fit_info = {"n_iter": int(result.nit), "converged": converged, "polish_grad_norm": grad_norm, "nll": float(result.fun), "b": b,
                 "b_at_bound": count_at_bound(b) if use_order else 0, "n_at_bound": count_chart_at_bound(result.x, bounds), "inner_limit_hits": int(not result.success)}
+    idx = np.arange(x0.size)
+    fit_info.update(boundary_activity(result.x, bounds, {"b": idx[n_mu + n_gamma:], "llm_other": idx[: n_mu + n_gamma]}))
     return mu, gamma, U, V, b, fit_info
 
 
