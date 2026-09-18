@@ -200,6 +200,45 @@ The notebook draws the three appendix figures and the main-text calibration figu
 (`fig_real_calibration.pdf`, Figure 4), and adds the descriptive crossover table. It is the only
 place figure code lives, so there is no CLI that can drift away from it.
 
+## Runtime
+
+Measured on an 18-core Apple M5 Max with `--workers 16` (each worker single-threaded; the
+runners set `OMP_NUM_THREADS=1`). Wall-clock times, 50 seeds, current code:
+
+| Study | Cells | Wall clock |
+|---|---|---|
+| r1 `main10`, `main10_mis` (all methods) | 550 each | about 1 min each |
+| r1 `app20` (N = 20, K = 6, r = 2) | 550 | about 2 min |
+| r1 `main10_pos` | 250 | under 1 min |
+| robustness `order` (GACV methods) | 1,200 | about 6 min |
+| robustness `noise` / `noise_scarce` (GACV methods) | 1,350 each | about 12 / 15 min |
+| robustness `budget` (GACV methods) | 2,850 | about 15 min |
+| robustness `llm_budget` (GACV methods) | 4,000 | about 50 min |
+| `intermediate_budget` (Cons-Cal and DIAL-mu) | 2,850 | about 15 min |
+
+The rows marked "GACV methods" are `--methods dial_mu,oracle_test,dial_nodeb,dial_w,dial_rsel`;
+the remaining methods (baselines, staged endpoints, fixed-weight fits) add roughly a fifth, so a
+full `--sweep all` run is about two hours. Where the time goes, per real-data cell:
+
+- **GACV paths dominate.** `dial_mu`, `dial_nodeb`, `dial_w` and `dial_rsel` each fit the full
+  lambda grid (seven joint fits, warm-started) and evaluate GACV at every weight; `dial_rsel`
+  does this at every rank 0..`rank_select_max` and is still the most expensive method.
+- **Arena `all` cells are the slowest** (K = 21 judges, about 210k LLM rows), and `llm_budget`
+  is the largest sweep, so it takes about half of the total.
+- **No work is repeated.** One LLM-only fit serves Cons-Cal, `staged_w`, and the rank-`llm_rank`
+  member of the rank selection (`baselines.calibrate_llm_fit`), and `dial_rsel` reuses the
+  `dial_w` path at that rank instead of refitting it. Both computations are deterministic, so
+  the reuse is exact.
+- **The GACV Hessian is exact** (`gacv.q_lambda_hessian`), not a central finite difference
+  (which cost 2 dim(zeta) gradient passes per weight); it agrees with the finite difference to
+  about 1e-11 relative (`tests/test_gacv.py`). Together with the reuse this halved the
+  GACV-method time per real-data cell, with identical selected weights and scores on every
+  checked cell and on all 1,900 simulation cells.
+
+To recompute only some methods, pass `--methods` (cells that already have all listed methods are
+skipped) and `--datasets` / `--panels`; `--out` writes to a separate results root, so a rerun can
+be compared with the stored rows before replacing them.
+
 ## Side-study runner
 
 `experiments/real_data/_runner.py` holds the resumable process-pool loop the side studies

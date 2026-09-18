@@ -93,3 +93,28 @@ def test_select_lambda_all_irregular_falls_back_to_anchor():
     assert not sel["human_only_exists"]
     assert len(sel["dropped"]) == len(sel["gacv_path"])
     assert sel["lam"] == np.inf and np.all(np.isfinite(sel["s_H"]))
+
+
+def test_select_lambda_excludes_box_active_but_warm_starts(data, monkeypatch):
+    """A converged box-active finite-lambda fit warm-starts the next weight but never enters the argmin."""
+    import dial_judge.gacv as gacv_mod
+
+    d = data
+    grid = [5.0, 20.0, 80.0]
+    real_joint, inits = gacv_mod.joint, []
+
+    def flagged_joint(*args, **kwargs):
+        inits.append(kwargs.get("init_params"))
+        fit = real_joint(*args, **kwargs)
+        if kwargs["lam"] == 80.0:          # the first (largest) weight on the downward path
+            fit["fit_info"] = {**fit["fit_info"], "boundary_any": True}
+        return fit
+
+    monkeypatch.setattr(gacv_mod, "joint", flagged_joint)
+    sel = select_lambda(d["N"], d["K"], d["r"], d["pairs"], n_ijk_llm=d["n_ijk"], y_ijk_llm=d["y_ijk"], n_order=d["n_order"], y_order=d["y_order"],
+                        lambda_grid=grid, return_all=True, align="mu")
+    point = next(p for p in sel["gacv_path"] if p["lam"] == 80.0)
+    assert not point["regular"] and "box_active" in point["reasons"]
+    assert 80.0 in sel["dropped"] and sel["lam"] != 80.0
+    fit80 = dict(sel["candidates"])[80.0]
+    assert inits[1] is not None and np.allclose(inits[1][1], fit80["mu"])

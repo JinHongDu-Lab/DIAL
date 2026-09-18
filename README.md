@@ -71,6 +71,11 @@ python run_real_data.py --list-studies
 Generated run metadata and summaries are written under `results/`, which is
 ignored by Git.
 
+The full paper experiments take about two hours on 16 workers, most of it in the
+real-data GACV paths; see the runtime section of
+[experiments/README.md](experiments/README.md#runtime) for per-study times and
+what dominates them.
+
 ## Repository layout
 
 ```text

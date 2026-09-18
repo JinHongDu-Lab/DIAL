@@ -152,6 +152,142 @@ def q_lambda_grad(
     return q, np.concatenate(parts)
 
 
+def q_lambda_hessian(
+    zeta,
+    N,
+    K,
+    r,
+    judge_basis,
+    item_basis,
+    use_order,
+    n_ijk,
+    y_ijk,
+    n_order,
+    y_order,
+    pair_arrays,
+    lam,
+    n_H,
+    n_L,
+):
+    """Exact Hessian of `q_lambda_grad`'s criterion in the centering-reduced chart.
+
+    With F = [gamma, U], G = [mu, V], S = F G^T and s = G[:, :m+1] c, c = (alpha, a), both
+    likelihoods are logistic in linear predictors, so the Hessian in the raw coordinates
+    (F, b, G, c) is the Gauss-Newton term J^T W J plus the bilinear curvature of S = F G^T and
+    s = G c weighted by the score residuals. The chart is affine in the raw coordinates, so the
+    reduced Hessian is T^T H_raw T. Replaces the 2 dim(zeta) gradient evaluations of the
+    central finite difference with one likelihood pass.
+    """
+    gamma, mu, U, V, b, alpha, a = unpack_reduced(zeta, N, K, r, judge_basis, item_basis, use_order)
+    a = np.atleast_1d(a)
+    m = a.size
+    R = r + 1
+    F = np.column_stack([gamma, U])
+    G = np.column_stack([mu, V])
+    c = np.concatenate([[float(alpha)], a])
+    S = F @ G.T
+    tri_i, tri_j = np.triu_indices(N, k=1)
+    P = tri_i.size
+    E = np.zeros((P, N))
+    E[np.arange(P), tri_i] = 1.0
+    E[np.arange(P), tri_j] = -1.0
+    delta = S @ E.T                                                     # (K, P)
+    if use_order:
+        order_a = np.array([-1.0, 1.0])
+        eta = delta[:, :, None] + np.asarray(b, dtype=float)[:, None, None] * order_a[None, None, :]
+        n_obs = np.asarray(n_order, dtype=float)[:, tri_i, tri_j, :]
+        y_obs = np.asarray(y_order, dtype=float)[:, tri_i, tri_j, :]
+        p = expit(eta)
+        resid = (n_obs * p - y_obs) * (n_obs > 0)
+        w = n_obs * p * (1.0 - p)
+        r_S, w_S = resid.sum(axis=2), w.sum(axis=2)                     # (K, P)
+        w_Sb = (w * order_a[None, None, :]).sum(axis=2)                 # (K, P)
+        w_bb = w.sum(axis=(1, 2))                                       # (K,)
+    else:
+        n_obs = np.asarray(n_ijk, dtype=float)[:, tri_i, tri_j]
+        y_obs = np.asarray(y_ijk, dtype=float)[:, tri_i, tri_j]
+        p = expit(delta)
+        r_S = (n_obs * p - y_obs) * (n_obs > 0)
+        w_S = n_obs * p * (1.0 - p)
+    scale_l = lam / n_L
+    grad_S = scale_l * (r_S @ E)                                        # (K, N)
+    H_S = scale_l * np.einsum("kp,pi,pj->kij", w_S, E, E)               # (K, N, N)
+
+    # human side: s = alpha mu + V[:, :m] a, logistic in s_i - s_j
+    i_idx, j_idx, n_arr, y_arr = pair_arrays
+    s = G[:, : m + 1] @ c
+    ph = expit(s[i_idx] - s[j_idx])
+    D = np.zeros((i_idx.size, N))
+    D[np.arange(i_idx.size), i_idx] += 1.0
+    D[np.arange(i_idx.size), j_idx] -= 1.0
+    g_s = ((n_arr * ph - y_arr) @ D) / n_H
+    H_s = (D.T * (n_arr * ph * (1.0 - ph))) @ D / n_H
+
+    # raw index layout: gamma, U (row-major), [b], mu, V (row-major), alpha, a
+    iF = np.empty((K, R), dtype=int)
+    iF[:, 0] = np.arange(K)
+    iF[:, 1:] = K + np.arange(K * r).reshape(K, r)
+    off = K * R
+    ib = off + np.arange(K) if use_order else None
+    off += K if use_order else 0
+    iG = np.empty((N, R), dtype=int)
+    iG[:, 0] = off + np.arange(N)
+    iG[:, 1:] = off + N + np.arange(N * r).reshape(N, r)
+    off += N * R
+    ic = off + np.arange(m + 1)
+    H = np.zeros((off + m + 1, off + m + 1))
+
+    HG = np.einsum("kij,jc->kic", H_S, G)                               # (K, N, R)
+    # F-F: judge-diagonal, G^T H_k G
+    FF = np.einsum("kic,id->kcd", HG, G)
+    for k in range(K):
+        H[np.ix_(iF[k], iF[k])] += FF[k]
+    # G-G: sum_k F_kc F_kd H_k
+    GG = np.einsum("kc,kd,kij->icjd", F, F, H_S)
+    H[np.ix_(iG.ravel(), iG.ravel())] += GG.reshape(N * R, N * R)
+    # F-G: F_kd (H_k G_c)_j + [c == d] grad_S[k, j]
+    FG = np.einsum("kd,kjc->kcjd", F, HG)
+    for cc in range(R):
+        FG[:, cc, :, cc] += grad_S
+    FG = FG.reshape(K * R, N * R)
+    H[np.ix_(iF.ravel(), iG.ravel())] += FG
+    H[np.ix_(iG.ravel(), iF.ravel())] += FG.T
+    if use_order:
+        h_Sb = scale_l * (w_Sb @ E)                                     # (K, N)
+        Fb = np.einsum("kic,ki->kc", np.broadcast_to(G, (K, N, R)), h_Sb)
+        GbGk = np.einsum("kc,ki->kic", F, h_Sb)                         # H[G_ic, b_k]
+        for k in range(K):
+            H[iF[k], ib[k]] += Fb[k]
+            H[ib[k], iF[k]] += Fb[k]
+            H[iG.ravel(), ib[k]] += GbGk[k].ravel()
+            H[ib[k], iG.ravel()] += GbGk[k].ravel()
+        H[ib, ib] += scale_l * w_bb
+    # human blocks
+    iGm = iG[:, : m + 1]
+    H[np.ix_(iGm.ravel(), iGm.ravel())] += np.einsum("c,d,ij->icjd", c, c, H_s).reshape(N * (m + 1), N * (m + 1))
+    Gc = np.einsum("c,id->icd", c, H_s @ G[:, : m + 1])
+    for cc in range(m + 1):
+        Gc[:, cc, cc] += g_s
+    Gc = Gc.reshape(N * (m + 1), m + 1)
+    H[np.ix_(iGm.ravel(), ic)] += Gc
+    H[np.ix_(ic, iGm.ravel())] += Gc.T
+    H[np.ix_(ic, ic)] += G[:, : m + 1].T @ H_s @ G[:, : m + 1]
+
+    # chart Jacobian T: zeta -> raw
+    blocks = [judge_basis, np.kron(judge_basis, np.eye(r))]
+    if use_order:
+        blocks.append(np.eye(K))
+    blocks += [item_basis, np.kron(item_basis, np.eye(r)), np.eye(m + 1)]
+    T = np.zeros((H.shape[0], zeta.size))
+    row = col = 0
+    for B in blocks:
+        T[row: row + B.shape[0], col: col + B.shape[1]] = B
+        row += B.shape[0]
+        col += B.shape[1]
+    Hz = T.T @ H @ T
+    return 0.5 * (Hz + Hz.T)
+
+
 def hessian_from_grad(grad_fn, x, eps=1e-5):
     n = x.size
     hess = np.zeros((n, n), dtype=float)
@@ -230,7 +366,11 @@ def gacv_for_fit(
         )
 
     q_val, _ = grad_fn(zeta)
-    hess = hessian_from_grad(grad_fn, zeta, eps=hess_eps)
+    # exact Hessian; `hess_eps` is kept for callers and only used by the finite-difference check in the tests
+    hess = q_lambda_hessian(
+        zeta, N, K, r, judge_basis, item_basis, use_order,
+        n_ijk, y_ijk, n_order, y_order, pair_arrays, lam, n_H, n_L,
+    )
     g_t = human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i_obs, j_obs, z_obs)
     g_bar = g_t.mean(axis=0)
     emp_j = ((g_t - g_bar).T @ (g_t - g_bar)) / n_H
@@ -339,9 +479,14 @@ def select_lambda(
     The grid is traversed from the largest lambda downward; the first fit is
     initialized from the LLM-only staged fit (computed here unless `staged_fit`
     is passed) and each subsequent fit from the previous one (plan Algorithm 1).
-    With `guard`, candidates whose fit is non-convergent or whose criterion
-    Hessian is singular beyond the chart's exact invariances are excluded from
-    the argmin (Assumption a2-gacv) and listed in `dropped`.
+    With `guard`, finite-lambda candidates whose fit is non-convergent, box-active
+    (a chart coordinate on the finite-fit box, `fit_info["boundary_any"]`), or whose
+    criterion Hessian is singular beyond the chart's exact invariances are excluded
+    from the argmin (Assumption a2-gacv) and listed in `dropped`; a converged
+    box-active fit still warm-starts the next weight. The lam = inf endpoint is not
+    dropped for box activity of its LLM-only fit, on which GACV conditions, only
+    for box activity of its calibration coordinates. Each `gacv_path` entry lists
+    its exclusion `reasons`.
     Every candidate, endpoints included, is marked irregular when its calibrated
     score exceeds `max_abs_score` in absolute value (a finite-fit bound: a
     centered log-odds of 10 is a pairwise probability above 0.99999, which no
@@ -390,10 +535,15 @@ def select_lambda(
         init_params = (staged_fit["gamma"], staged_fit["mu"], staged_fit["U"], staged_fit["V"], staged_fit["b"])
 
     candidates = []  # (lam, gacv, regular, fit)
+    reasons = {}     # lam -> exclusion reasons, for the returned path
     if include_endpoints:
         W = calibration_design(staged_fit["mu"], np.asarray(staged_fit["V"], dtype=float)[:, :a_staged.size])
         e = endpoint_gacv(W[i_obs] - W[j_obs], staged_fit["s_H"], i_obs, j_obs, z_obs)
-        e["regular"] = e["regular"] and bool(staged_fit["fit_info"].get("converged", True))
+        # GACV at lambda = inf conditions on the LLM-only fit, whose box activity is therefore not a
+        # reason to drop it; only the calibration coordinates, which the criterion varies, must be interior.
+        cal_box_active = bool((staged_fit.get("cal_info") or {}).get("boundary_cal", False))
+        reasons[np.inf] = ([] if e["regular"] else ["singular_or_score"]) + ([] if staged_fit["fit_info"].get("converged", True) else ["not_converged"]) + (["box_active"] if cal_box_active else [])
+        e["regular"] = e["regular"] and bool(staged_fit["fit_info"].get("converged", True)) and not cal_box_active
         candidates.append((np.inf, e["gacv"], e["regular"], {**staged_fit, "lam": np.inf}))
 
     current_init = init_params
@@ -406,23 +556,32 @@ def select_lambda(
             max_steps=max_steps, tol=tol, tau=tau, inner_maxiter=inner_maxiter,
             with_uq=False, init_params=current_init, align=align,
         )
-        if warm_start:
+        converged = bool(fit["fit_info"].get("converged", True))
+        if warm_start and converged:
+            # a converged box-constrained fit warm-starts the path even when it is box-active
             current_init = (fit["gamma"], fit["mu"], fit["U"], fit["V"], fit["b"])
         scores = gacv_for_fit(fit, N, K, r, n_ijk_llm, y_ijk_llm, n_order, y_order, human_pairs, i_obs, j_obs, z_obs)
-        candidates.append((float(lam), scores["gacv"], scores["regular"], fit))
+        box_active = bool(fit["fit_info"].get("boundary_any", False))
+        reasons[float(lam)] = (["not_converged"] if not converged else []) + (["box_active"] if box_active else []) + \
+            (["singular_hessian"] if scores["hess_null_dim"] > r * (r + 1) else [])
+        candidates.append((float(lam), scores["gacv"], scores["regular"] and not box_active, fit))
 
     if include_endpoints:
         h = fit_human_only_btl(N, human_pairs)
         B = make_centering_basis(N)
         e = endpoint_gacv(B[i_obs] - B[j_obs], h["s_H"], i_obs, j_obs, z_obs)
         human_only_exists = btl_mle_exists(N, human_pairs)
+        reasons[0.0] = ([] if e["regular"] else ["singular_or_score"]) + ([] if human_only_exists or not endpoint_existence_check else ["mle_not_exists"])
         if endpoint_existence_check:
             e["regular"] = e["regular"] and human_only_exists
         candidates.append((0.0, e["gacv"], e["regular"], {**h, "lam": 0.0, "b": np.zeros(K), "mu": None, "V": None}))
 
     if max_abs_score is not None:
+        for c in candidates:
+            if not bool(np.max(np.abs(np.asarray(c[3]["s_H"], dtype=float))) <= max_abs_score):
+                reasons.setdefault(c[0], []).append("score_bound")
         candidates = [(c[0], c[1], c[2] and bool(np.max(np.abs(np.asarray(c[3]["s_H"], dtype=float))) <= max_abs_score), c[3]) for c in candidates]
-    path = [{"lam": c[0], "gacv": c[1], "regular": c[2]} for c in candidates]
+    path = [{"lam": c[0], "gacv": c[1], "regular": c[2], "reasons": sorted(set(reasons.get(c[0], []))) if not c[2] else []} for c in candidates]
     admissible = [c for c in candidates if (c[2] or not guard)]
     if not admissible:
         # Every candidate is irregular: the human sample is (nearly) separated at every

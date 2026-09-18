@@ -93,3 +93,21 @@ def test_gacv_objective_gradient_matches_finite_difference(small_study):
         minus[idx] -= eps
         numeric[idx] = (objective(plus)[0] - objective(minus)[0]) / (2 * eps)
     np.testing.assert_allclose(analytic, numeric, rtol=2e-5, atol=2e-6)
+
+
+def test_analytic_hessian_matches_finite_difference(small_study):
+    from dial_judge.gacv import hessian_from_grad, q_lambda_hessian
+
+    N, K = small_study["N"], small_study["K"]
+    pair_arrays = pairs_to_arrays(small_study["human_pairs"])
+    rng = np.random.default_rng(0)
+    for r, use_order, m in [(1, True, 1), (1, True, 0), (1, False, 1), (0, True, 0)]:
+        jb, ib = make_centering_basis(K), make_centering_basis(N)
+        zeta = pack_reduced(1 + 0.3 * rng.normal(size=K), rng.normal(size=N), rng.normal(size=(K, r)), rng.normal(size=(N, r)),
+                            0.4 * rng.normal(size=K), 1.1, rng.normal(size=m), use_order)
+        args = (N, K, r, jb, ib, use_order, small_study["n_ijk"], small_study["y_ijk"],
+                small_study["n_order"] if use_order else None, small_study["y_order"] if use_order else None,
+                pair_arrays, 3.0, total_human_n(small_study["human_pairs"]), total_llm_n(small_study["n_ijk"]))
+        exact = q_lambda_hessian(zeta, *args)
+        numeric = hessian_from_grad(lambda z: q_lambda_grad(z, *args), zeta)
+        np.testing.assert_allclose(exact, numeric, rtol=1e-6, atol=1e-7 * np.abs(numeric).max())

@@ -36,7 +36,8 @@ from pathlib import Path
 
 import numpy as np
 
-from dial_judge.baselines import fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
+from dial_judge.baselines import calibrate_llm_fit, fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl
+from dial_judge.benchmarks import fit_hja
 from dial_judge.benchmarks import fit_dial
 from dial_judge.data import comparisons_to_aggregated, comparisons_to_order_aggregated, pool_pairs
 from dial_judge.dial_model import fit_human_calibration
@@ -191,9 +192,17 @@ def run_cell(args):
         fail("pooled_cal", e)
 
     # Cons-Cal (staged endpoint of DIAL) and DIAL (align mu)
+    # one LLM-only fit (deterministic) serves both staged endpoints, Cons-Cal and staged_w
+    _llm_fit = {}
+
+    def llm_fit():
+        if "fit" not in _llm_fit:
+            _llm_fit["fit"] = fit_hja(N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order)
+        return _llm_fit["fit"]
+
     st_mu = None
     try:
-        st_mu = fit_consensus_only_calibrated(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order)
+        st_mu = calibrate_llm_fit(llm_fit(), pairs, consensus_only=True)
         rec("consensus_cal", st_mu["s_H"], lam=float("inf"), converged=bool(st_mu["fit_info"]["converged"]), S_mse=float(np.mean((S_of(st_mu) - S) ** 2)), **b_metrics(st_mu["b"]))
     except Exception as e:  # noqa: BLE001
         fail("consensus_cal", e)
@@ -229,7 +238,7 @@ def run_cell(args):
 
     # W-calibration diagnostics
     try:
-        st_w = fit_staged_structured_calibration(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order)
+        st_w = calibrate_llm_fit(llm_fit(), pairs, consensus_only=False)
         rec("staged_w", st_w["s_H"], lam=float("inf"), converged=bool(st_w["fit_info"]["converged"]), S_mse=float(np.mean((S_of(st_w) - S) ** 2)), **b_metrics(st_w["b"]))
         selw = select_lambda(N, K, r, pairs, n_ijk_llm=n_ijk, y_ijk_llm=y_ijk, n_order=n_order, y_order=y_order, staged_fit=st_w, return_all=True, align="W")
         lamw = float(selw["lam"])

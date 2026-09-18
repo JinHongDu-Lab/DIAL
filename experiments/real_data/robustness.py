@@ -47,7 +47,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import kendalltau
 
-from dial_judge.baselines import fit_atc_btl, fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
+from dial_judge.baselines import calibrate_llm_fit, fit_atc_btl, fit_consensus_only_calibrated, fit_human_only_btl, fit_pooled_btl, fit_staged_structured_calibration
+from dial_judge.benchmarks import fit_hja
 from dial_judge.benchmarks import fit_dial
 from dial_judge.dial_model import fit_human_calibration
 from dial_judge.evaluate import heldout_log_loss, score_accuracy
@@ -284,8 +285,13 @@ def clean_fit(dataset, cfg, cluster="pair", r=1):
 
 
 # --------------------------------------------------------------------------- one cell
-def _gacv_rank_select(N, K, pairs, A, use_order, lam_grid, r_max, staged_cache):
-    """GACV over candidate ranks (each with its own lambda path); returns (r, selection, table)."""
+def _gacv_rank_select(N, K, pairs, A, use_order, lam_grid, r_max, staged_cache, selection_cache=None):
+    """GACV over candidate ranks (each with its own lambda path); returns (r, selection, table).
+
+    `staged_cache` maps (r, use_order) to a staged W-calibrated fit and `selection_cache` maps r to
+    an already computed `select_lambda(..., align="W")` on that fit and grid (the `dial_w` path at
+    the LLM rank), so those are not refitted; both computations are deterministic, so reuse is exact."""
+    selection_cache = selection_cache or {}
     best, table = None, []
     for r_c in range(r_max + 1):
         try:
@@ -293,8 +299,11 @@ def _gacv_rank_select(N, K, pairs, A, use_order, lam_grid, r_max, staged_cache):
             if key not in staged_cache:
                 staged_cache[key] = fit_staged_structured_calibration(N, K, r_c, A[0], A[1], pairs, n_order=A[2] if use_order else None, y_order=A[3] if use_order else None)
             st_c = staged_cache[key]
-            sel_c = select_lambda(N, K, r_c, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2] if use_order else None, y_order=A[3] if use_order else None,
-                                  staged_fit=st_c, lambda_grid=lam_grid, return_all=(r_c == 0))
+            if r_c in selection_cache and r_c != 0:
+                sel_c = selection_cache[r_c]
+            else:
+                sel_c = select_lambda(N, K, r_c, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2] if use_order else None, y_order=A[3] if use_order else None,
+                                      staged_fit=st_c, lambda_grid=lam_grid, return_all=(r_c == 0))
             table.append(dict(r=r_c, gacv=float(sel_c["gacv"]), lam=float(sel_c["lam"])))
             if best is None or sel_c["gacv"] < best[1]["gacv"]:
                 best = (r_c, sel_c)
@@ -423,11 +432,20 @@ def run_cell(job):
         except Exception as e:  # noqa: BLE001
             fail("pooled_cal", e)
 
+    # One LLM-only fit at rank r_llm serves Cons-Cal, the W-calibrated staged endpoint and the rank-r_llm
+    # member of the rank selection: the fit is deterministic, so sharing it is exact.
+    _llm_fit = {}
+
+    def llm_fit():
+        if "fit" not in _llm_fit:
+            _llm_fit["fit"] = fit_hja(N, K, r_llm, n_ijk=A[0], y_ijk=A[1], n_order=A[2], y_order=A[3])
+        return _llm_fit["fit"]
+
     # ---- Cons-Cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
     st_mu = None
     if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu", "atc_btl"):
         try:
-            st_mu = fit_consensus_only_calibrated(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
+            st_mu = calibrate_llm_fit(llm_fit(), pairs, consensus_only=True)
             if want("consensus_cal"):
                 rec("consensus_cal", st_mu["s_H"], **lam_fields(np.inf), alpha=float(st_mu["alpha_H"]), **flags(st_mu), **inj(st_mu))
         except Exception as e:  # noqa: BLE001
@@ -477,9 +495,10 @@ def run_cell(job):
             fail("dial_nodeb", e)
 
     # ---- W-calibration diagnostics at the same LLM rank
+    st_w, selw = None, None
     if r_llm >= 1 and want("staged_w", "dial_w", "dial_mle_w"):
         try:
-            st_w = fit_staged_structured_calibration(N, K, r_llm, A[0], A[1], pairs, n_order=A[2], y_order=A[3])
+            st_w = calibrate_llm_fit(llm_fit(), pairs, consensus_only=False)
             if want("staged_w"):
                 rec("staged_w", st_w["s_H"], **lam_fields(np.inf), **flags(st_w))
             if want("dial_w"):
@@ -494,7 +513,9 @@ def run_cell(job):
     # ---- rank-selected W-calibration (appendix diagnostic): (r, lambda) by GACV over r in 0..r_max
     if want("dial_rsel"):
         try:
-            r_sel, selr, table = _gacv_rank_select(N, K, pairs, A, True, lam_grid, r_max, {})
+            staged_cache = {(r_llm, True): st_w} if st_w is not None else {}
+            selection_cache = {r_llm: selw} if selw is not None else {}
+            r_sel, selr, table = _gacv_rank_select(N, K, pairs, A, True, lam_grid, r_max, staged_cache, selection_cache)
             rec("dial_rsel", selr["s_H"], r_sel=r_sel, **lam_fields(selr["lam"]), n_dropped=len(selr["dropped"]), **flags(selr), rank_table=table)
         except Exception as e:  # noqa: BLE001
             fail("dial_rsel", e)

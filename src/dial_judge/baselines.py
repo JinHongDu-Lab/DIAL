@@ -87,6 +87,16 @@ def fit_pooled_btl(N, n_ijk, y_ijk, maxiter=1000):
     }
 
 
+def calibrate_llm_fit(hja_fit, human_pairs, consensus_only=False, calibration_maxiter=1000):
+    """Calibrate an existing LLM-only fit, as `fit_consensus_only_calibrated` (consensus_only=True)
+    or `fit_staged_structured_calibration` (False) would after refitting it. Lets one LLM-only
+    fit serve both endpoints; the input fit is not modified."""
+    import copy
+
+    method = "consensus_only_calibrated" if consensus_only else "staged_structured_calibration"
+    return _calibrated_result(method, copy.deepcopy(hja_fit), human_pairs, consensus_only=consensus_only, maxiter=calibration_maxiter)
+
+
 def _calibrated_result(method, hja_fit, human_pairs, consensus_only=False, maxiter=1000):
     mu = np.asarray(hja_fit["mu"], dtype=float)
     if consensus_only:
