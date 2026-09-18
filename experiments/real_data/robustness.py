@@ -412,7 +412,8 @@ def run_cell(job):
         """Convergence and separation diagnostics of a fitted candidate (human-only endpoint: none)."""
         fi = fit.get("fit_info", {}) or {}
         return dict(converged=bool(fi.get("converged", True)), b_at_bound=int(fi.get("b_at_bound", 0)), n_at_bound=int(fi.get("n_at_bound", 0)), inner_limit_hits=int(fi.get("inner_limit_hits", 0)),
-                    max_abs_S=float(fi.get("max_abs_S", np.nan)), max_gamma=float(fi.get("max_gamma", np.nan)), polish_grad=float(fi.get("polish_grad_norm", np.nan)))
+                    max_abs_S=float(fi.get("max_abs_S", np.nan)), max_gamma=float(fi.get("max_gamma", np.nan)), polish_grad=float(fi.get("polish_grad_norm", np.nan)),
+                    all_dropped=bool(fit.get("all_dropped", False)))
 
     def lam_fields(lam):
         lam = float(lam)

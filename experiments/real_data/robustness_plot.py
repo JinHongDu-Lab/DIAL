@@ -31,7 +31,12 @@ def load(dataset, base="."):
         if c not in df:
             df[c] = np.nan
     df["n_H_level"] = df["n_H_level"].fillna(-1).astype(int)
-    df["failed"] = df["error"].notna()
+    if "all_dropped" not in df:
+        df["all_dropped"] = False
+    df["all_dropped"] = df["all_dropped"].fillna(False).astype(bool)
+    # a replication in which every GACV candidate failed a guard has no admissible fit, so it is
+    # reported as failed and excluded from the aggregated means (it is counted in `n_failed`)
+    df["failed"] = df["error"].notna() | df["all_dropped"]
     df["lam_rel"] = df["lam_rel"].replace([np.inf, -np.inf], np.nan)
     for sw in ("noise", "noise_scarce"):
         noise0 = df[(df.sweep == sw) & (df.level == 0)]

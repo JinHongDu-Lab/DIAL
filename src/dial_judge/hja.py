@@ -14,6 +14,8 @@ src/models.py, with position effects added as judge-specific parameters b.
 import time
 from functools import lru_cache
 
+import os
+
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import expit
@@ -122,20 +124,18 @@ def negative_log_likelihood_and_grad(mu, gamma, U, V, n_ijk, y_ijk, b=None, n_or
     return loss_value, grad_mu, grad_gamma, grad_U, grad_V, grad_b
 
 
-# Finite-fit bound on the judge position effects. A centered log-odds of 10 is a
-# first-position probability of 0.99995, beyond what any judge's sample supports; a judge
-# whose order term is separated (every retained verdict explained by display position) has
-# no finite MLE for b_k, and the bound makes the maximizer exist so that the remaining
-# parameters, in particular the consensus, are estimated at the limiting profile likelihood.
-# Judges at the bound are reported as `b_at_bound` in fit_info.
-POSITION_EFFECT_BOUND = 10.0
-# The same box is applied to every coordinate of the centering-reduced chart (gamma, U, mu, V and,
-# in the joint fit, alpha and a): when a judge's verdicts never contradict its fitted scores its
-# loading (gamma_k, U_k) has no finite maximizer either, and without a box the divergence stalls
-# the optimizer and, along a warm-started lambda path, disqualifies every candidate. The box is
-# inert on regular fits (all coordinates of the anchored chart are O(1) to O(5) there) and makes
-# the maximizer exist otherwise; coordinates on the boundary are reported as `n_at_bound`.
-CHART_BOUND = 10.0
+# Computational safeguard, not part of the estimator: every optimizer works on a large box in
+# the centering-reduced chart (gamma, U, b, mu, V and, in the joint fit, alpha and a). Without it
+# an unresolved fit stalls the optimizer with a small but nonzero gradient and, along a
+# warm-started lambda path, would disqualify every candidate below it. A fit that stops on the
+# boundary is not numerically resolved by this implementation; it may still warm-start the next
+# weight but is excluded from GACV selection. Coordinates on the boundary are reported as
+# `n_at_bound` (`b_at_bound` for the order effects) and as the `boundary_*` flags.
+#
+# The bound is a numerical tuning constant, overridable through DIAL_CHART_BOUND for
+# box-sensitivity checks; the reported runs use the default 10.
+CHART_BOUND = float(os.environ.get("DIAL_CHART_BOUND", "10"))
+POSITION_EFFECT_BOUND = CHART_BOUND
 _BOUND_TOL = 1e-6
 
 

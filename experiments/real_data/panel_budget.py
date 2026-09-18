@@ -67,6 +67,8 @@ def panel_budget_data():
     keys = ['dataset', 'sweep', 'panel', 'level', 'n_H_level', 'method']
     assert not data.duplicated(keys + ['seed']).any()
     assert data.groupby(keys).seed.apply(lambda x: set(x) == set(range(SEEDS))).all()
+    # replications with no admissible GACV candidate carry no usable score (robustness_plot.load)
+    data = data[~data.failed]
     return data.groupby(keys).agg(excess=('excess', 'mean'), se=('excess', 'sem'),
                                   tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
                                   N=('N', 'first'), n_H=('n_H', 'mean'), n_L=('n_L', 'mean'),
@@ -98,11 +100,14 @@ def intermediate_data(root=None):
     root = Path(ROOT / 'results' / 'intermediate_budget' if root is None else root)
     x = pd.read_csv(root / 'rows.csv')
     x = x[x.method.isin(METHOD_KEYS)].copy()          # the run also stores endpoint-margin variants
+    if 'all_dropped' in x:                            # no admissible GACV candidate: no usable score
+        dropped = x['all_dropped'].fillna(False).astype(bool)
+        x = x[~dropped]
     seeds = json.loads((root / 'design.json').read_text())['seeds']
     keys = ['dataset', 'panel', 'n_H_level', 'method']
     assert not x.duplicated(keys + ['seed']).any()
-    assert x.groupby(keys).seed.apply(lambda z: set(z) == set(range(seeds))).all()
-    assert len(x) == 57 * 2 * seeds
+    assert x.groupby(keys).seed.apply(lambda z: set(z) <= set(range(seeds))).all()
+    assert len(x) <= 57 * 2 * seeds
 
     base = x[x.method == 'consensus_cal'].set_index(['dataset', 'panel', 'n_H_level', 'seed'])
     z = x.join(base.excess.rename('cons_excess'), on=['dataset', 'panel', 'n_H_level', 'seed'], validate='many_to_one')

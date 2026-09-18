@@ -498,7 +498,8 @@ def select_lambda(
     connected and the human-only fit is separated. The flag is returned as
     `human_only_exists`.
     When every candidate is irregular the selector returns the largest lambda (the
-    lam = inf endpoint when included) rather than the raw GACV minimizer.
+    lam = inf endpoint when included) rather than the raw GACV minimizer, and sets
+    `all_dropped`; that fit passed no guard, so callers report the replication as failed.
     The returned dict has `lam` in [0, inf]; for lam = 0 it carries the human-only
     score and for lam = inf the staged calibrated score.
     """
@@ -583,6 +584,7 @@ def select_lambda(
         candidates = [(c[0], c[1], c[2] and bool(np.max(np.abs(np.asarray(c[3]["s_H"], dtype=float))) <= max_abs_score), c[3]) for c in candidates]
     path = [{"lam": c[0], "gacv": c[1], "regular": c[2], "reasons": sorted(set(reasons.get(c[0], []))) if not c[2] else []} for c in candidates]
     admissible = [c for c in candidates if (c[2] or not guard)]
+    all_dropped = not admissible
     if not admissible:
         # Every candidate is irregular: the human sample is (nearly) separated at every
         # weight, so the guards give no basis for comparing GACV values. Fall back to the
@@ -595,6 +597,9 @@ def select_lambda(
     selected["gacv"] = best[1]
     selected["gacv_path"] = path
     selected["dropped"] = [c[0] for c in candidates if guard and not c[2]]
+    # every candidate failed a guard, so the returned fit is itself not admissible: the caller
+    # should report the replication as failed rather than use its score.
+    selected["all_dropped"] = bool(all_dropped)
     selected["human_only_exists"] = bool(human_only_exists) if include_endpoints else None
     if return_all:
         selected["candidates"] = [(c[0], c[3]) for c in candidates]
