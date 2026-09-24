@@ -13,10 +13,6 @@ ReasoningMode = Literal["disabled", "enabled", "required"]
 SUPPORTED_ADAPTERS = {
     "litellm",
     "openai_chat",
-    "hku_openai",
-    "hku_responses",
-    "hku_gemini",
-    "hku_claude",
     "google_gemini",
     "google_gemini_batch",
     "openai_batch",

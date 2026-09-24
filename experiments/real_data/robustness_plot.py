@@ -1,9 +1,9 @@
-"""Aggregate results/real_robustness/<dataset>/rows.jsonl for the Section 22 figures.
+"""Aggregate results/real_robustness/<dataset>/rows.jsonl for the real-data figures.
 
 Per (sweep, panel, kind, level, n_H_level, method): mean and Monte Carlo s.e. of the
 held-out metrics, the paired difference to human-only on the same split, endpoint
 shares of the selected weight, selected rank, and failure counts. Figures are drawn in
-notebooks/real_data_robustness.ipynb.
+notebooks/2_real_data_position.ipynb.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def _se(x):
 
 
 def aggregate(df):
-    df = df[~df.method.isin(["spectest", "planner"])]   # "planner" rows survive in older rows.jsonl files
+    df = df[~df.method.isin(["spectest", "planner"])]   # "planner": a retired method in older rows.jsonl files
     ok = df[~df.failed]
     g = ok.groupby(KEY + ["method"])
     agg = g.agg(n=("seed", "size"), K=("K", "first"), n_test=("n_test", "first"), floor=("floor", "mean"),

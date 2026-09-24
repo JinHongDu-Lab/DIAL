@@ -1,8 +1,8 @@
 """Analysis-ready data adapter for the collected judge responses.
 
-Reads ``data/<dataset>/results/<judge>/responses.jsonl`` and returns one tidy
-row per (judge, record, display order).  Collection files are only read, never
-rewritten; the normalized table is cached separately under ``results/cache/``.
+Reads ``data/<dataset>/responses.parquet`` (written by ``judge_query.export``) and
+returns one tidy row per (judge, record, display order).  The normalized table is
+cached under ``results/cache/``.
 
 The collection kit stores two distinct notions of the judge's answer:
 
@@ -16,12 +16,10 @@ The collection kit stores two distinct notions of the judge's answer:
 Position-bias quantities read ``choice``; agreement with ``human_winner`` reads
 ``canonical_verdict``.  Swapping the two inverts the swapped half of the data.
 
-The judge identity is the results *directory* name, which is the panel alias
-the study was configured with.  Rows inside one directory may carry a variant
-alias in their own ``judge`` field (for example a ``-64tok`` suffix on gap-fill
-re-queries of the same model with a larger output cap); that value is kept in
-``judge_alias`` so the decoding change stays visible without splitting one
-judge into two.
+The judge identity is ``panel_judge``, the panel alias of the study.  A row may
+carry a variant alias in its own ``judge`` field (for example a ``-64tok`` suffix
+on re-queries with a larger output cap); it is kept in ``judge_alias`` so one
+judge is not split into two.
 """
 
 from __future__ import annotations
@@ -52,25 +50,13 @@ CACHE_ROOT = Path(__file__).resolve().parents[2] / "results" / "cache"
 DECISIVE = ("model_a", "model_b")
 
 
-def judge_directories(dataset, data_root=None):
-    """Return ``{judge: responses.jsonl path}`` for judges with collected rows.
-
-    A judge whose results directory holds only ``metadata.json`` (no responses)
-    is omitted rather than reported as empty; ``ollama-deepseek-r1-32b-low`` is
-    in this state for ``arena_33k``.
-    """
+def responses_path(dataset, data_root=None):
+    """Path of one dataset's packed judge responses."""
     root = Path(data_root) if data_root is not None else DATA_ROOT
-    results = root / dataset / "results"
-    if not results.is_dir():
-        raise FileNotFoundError(f"no results directory for dataset {dataset!r}: {results}")
-    found = {}
-    for entry in sorted(results.iterdir()):
-        path = entry / "responses.jsonl"
-        if entry.is_dir() and path.is_file():
-            found[entry.name] = path
-    if not found:
-        raise FileNotFoundError(f"no responses.jsonl files under {results}")
-    return found
+    path = root / dataset / "responses.parquet"
+    if not path.is_file():
+        raise FileNotFoundError(f"missing {path}; run `python -m judge_query.export {dataset}` from data/")
+    return path
 
 
 def _canonical_pair(model_a, model_b):
@@ -102,7 +88,7 @@ def _reasoning(row):
     vendor-specific knob on no common cross-provider scale, so it is recorded
     per judge rather than treated as an ordered level.
     """
-    reasoning = (row.get("inference") or {}).get("reasoning") or {}
+    reasoning = row["inference"].get("reasoning") or {}
     mode = reasoning.get("mode")
     if mode is None:
         return None, None
@@ -146,7 +132,7 @@ def _row_to_record(row, dataset):
         "language": row.get("language"),
         "is_code": row.get("is_code"),
         "judge_alias": row.get("judge_alias"),
-        "max_output_tokens": (row.get("inference") or {}).get("max_output_tokens"),
+        "max_output_tokens": row["inference"].get("max_output_tokens"),
         "reasoning": reasoning,
         "reasoning_effort": reasoning_effort,
     }
@@ -174,19 +160,14 @@ def load_canonical(dataset, judges=None, data_root=None, use_cache=True, refresh
         frame = pd.read_parquet(cache_path)
 
     if frame is None:
+        raw = pd.read_parquet(responses_path(dataset, data_root))
         rows = []
-        for judge, path in judge_directories(dataset, data_root=data_root).items():
-            with path.open(encoding="utf-8") as handle:
-                for line in handle:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    payload = json.loads(line)
-                    # The directory is the panel alias; a row-level variant
-                    # alias is kept separately (see module docstring).
-                    payload["judge_alias"] = payload.get("judge", judge)
-                    payload["judge"] = judge
-                    rows.append(_row_to_record(payload, dataset))
+        for payload in raw.to_dict("records"):
+            payload = {k: (None if isinstance(v, float) and v != v else v) for k, v in payload.items()}
+            payload["inference"] = json.loads(payload["inference"]) if payload.get("inference") else {}
+            payload["judge_alias"] = payload["judge"]
+            payload["judge"] = payload["panel_judge"]
+            rows.append(_row_to_record(payload, dataset))
         frame = pd.DataFrame(rows)
         if use_cache:
             cache_path.parent.mkdir(parents=True, exist_ok=True)

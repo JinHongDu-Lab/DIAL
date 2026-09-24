@@ -1,1 +1,1 @@
-"""Real-data DIAL study scaffolds."""
+"""Real-data DIAL studies."""

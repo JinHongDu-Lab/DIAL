@@ -10,7 +10,7 @@ import httpx
 
 try:
     import litellm
-except ModuleNotFoundError:  # Optional for direct HKU adapters.
+except ModuleNotFoundError:  # Optional for the direct HTTP adapters.
     litellm = None  # type: ignore[assignment]
 
 from .config import AccountConfig, JudgeConfig
@@ -141,21 +141,7 @@ def _google_retry_after(response: httpx.Response) -> float | None:
 
 
 def quota_retry_after(detail: str) -> float | None:
-    """Parse an HKU-style quota replenishment countdown from an error.
-
-    HKU normally reports the countdown as plain ``HH:MM:SS``, resetting
-    within a day. On a few occasions (gpt-5.5, claude-opus-4.6,
-    qwen3-next-80b-thinking-low) it has instead reported a multi-day
-    countdown using .NET's TimeSpan default format ``D.HH:MM:SS`` (a leading
-    day count joined by a dot, not the word "day(s)") lasting several weeks.
-    Live re-checks showed those same models back to a normal sub-day
-    countdown within a day or two, so this looks like a transient gateway
-    anomaly rather than a documented cap (HKU's own rate-limit tables list
-    every chat model, including these, as a plain daily quota). Both formats
-    are matched here regardless of cause; ``routing.py``/``usage.py`` cap how
-    long a reported multi-day countdown is trusted before re-verifying live
-    (see ``QUOTA_REVALIDATE_AFTER``).
-    """
+    """Parse a quota replenishment countdown (``HH:MM:SS`` or ``D.HH:MM:SS``)."""
 
     match = re.search(
         r"quota\s+will\s+be\s+replenished\s+in\s+"
@@ -343,10 +329,10 @@ class LiteLLMAdapter:
             ) from error
 
 
-class _HKUBaseAdapter:
-    """Shared HTTP behavior for HKU API Gateway adapters."""
+class _HTTPAdapter:
+    """Shared HTTP behavior for direct JSON API adapters."""
 
-    provider_label = "HKU"
+    provider_label = "HTTP provider"
 
     def _url(self, judge: JudgeConfig, account: AccountConfig) -> str:
         base_url = (account.api_base or judge.api.base_url or "").rstrip("/")
@@ -397,10 +383,10 @@ class _HKUBaseAdapter:
         return value, response
 
 
-class HKUOpenAIAdapter(_HKUBaseAdapter):
-    """Call an HKU OpenAI-compatible chat endpoint."""
+class OpenAIChatAdapter(_HTTPAdapter):
+    """Call a configurable OpenAI-compatible chat-completions endpoint."""
 
-    provider_label = "HKU OpenAI"
+    provider_label = "OpenAI-compatible provider"
 
     async def complete(
         self,
@@ -462,32 +448,6 @@ class HKUOpenAIAdapter(_HKUBaseAdapter):
             text=text,
             usage=value.get("usage"),
             response_id=value.get("id"),
-            status_code=response.status_code,
-            headers=response.headers,
-        )
-
-
-class OpenAIChatAdapter(HKUOpenAIAdapter):
-    """Call a configurable OpenAI-compatible chat-completions endpoint."""
-
-    provider_label = "OpenAI-compatible provider"
-
-
-class HKUResponsesAdapter(_HKUBaseAdapter):
-    """Call an HKU/Azure Responses-only deployment."""
-
-    async def complete(
-        self,
-        judge: JudgeConfig,
-        account: AccountConfig,
-        api_key: str | None,
-        messages: list[dict[str, str]],
-        timeout: float,
-    ) -> ProviderResult:
-        payload = openai_responses_payload(judge, messages)
-        value, response = await self._post(judge, account, api_key, payload, timeout)
-        return openai_responses_provider_result(
-            value,
             status_code=response.status_code,
             headers=response.headers,
         )
@@ -765,28 +725,7 @@ def gemini_provider_result(
     )
 
 
-class HKUGeminiAdapter(_HKUBaseAdapter):
-    """Call HKU Vertex AI Gemini generateContent."""
-
-    async def complete(
-        self,
-        judge: JudgeConfig,
-        account: AccountConfig,
-        api_key: str | None,
-        messages: list[dict[str, str]],
-        timeout: float,
-    ) -> ProviderResult:
-        payload = gemini_generate_payload(judge, messages)
-        value, response = await self._post(judge, account, api_key, payload, timeout)
-        return gemini_provider_result(
-            value,
-            status_code=response.status_code,
-            headers=response.headers,
-            provider_label="HKU Gemini",
-        )
-
-
-class GoogleGeminiAdapter(_HKUBaseAdapter):
+class GoogleGeminiAdapter(_HTTPAdapter):
     """Call the Google Gemini Developer API directly."""
 
     provider_label = "Google Gemini"
@@ -811,64 +750,9 @@ class GoogleGeminiAdapter(_HKUBaseAdapter):
         )
 
 
-class HKUClaudeAdapter(_HKUBaseAdapter):
-    """Call HKU AWS Bedrock Claude Converse."""
-
-    async def complete(
-        self,
-        judge: JudgeConfig,
-        account: AccountConfig,
-        api_key: str | None,
-        messages: list[dict[str, str]],
-        timeout: float,
-    ) -> ProviderResult:
-        system, conversation = _split_messages(messages)
-        payload: dict[str, Any] = {
-            "messages": [
-                {
-                    "role": item["role"],
-                    "content": [{"text": item["content"]}],
-                }
-                for item in conversation
-            ]
-        }
-        if system:
-            payload["system"] = [{"text": system}]
-        inference = _inference_payload(judge, "claude")
-        if inference:
-            payload["inferenceConfig"] = inference
-        value, response = await self._post(judge, account, api_key, payload, timeout)
-        try:
-            parts = value["output"]["message"]["content"]
-            text = "".join(part.get("text", "") for part in parts).strip()
-        except (KeyError, TypeError) as error:
-            raise ProviderError(
-                "HKU Claude response is missing output.message.content",
-                category=ErrorCategory.INVALID_RESPONSE,
-                status_code=response.status_code,
-            ) from error
-        if not text:
-            raise ProviderError(
-                "HKU Claude response contains no text",
-                category=ErrorCategory.INVALID_RESPONSE,
-                status_code=response.status_code,
-            )
-        return ProviderResult(
-            text=text,
-            usage=value.get("usage"),
-            response_id=value.get("id"),
-            status_code=response.status_code,
-            headers=response.headers,
-        )
-
-
 ADAPTERS: dict[str, ProviderAdapter] = {
     "litellm": LiteLLMAdapter(),
     "openai_chat": OpenAIChatAdapter(),
-    "hku_openai": HKUOpenAIAdapter(),
-    "hku_responses": HKUResponsesAdapter(),
-    "hku_gemini": HKUGeminiAdapter(),
-    "hku_claude": HKUClaudeAdapter(),
     "google_gemini": GoogleGeminiAdapter(),
 }
 

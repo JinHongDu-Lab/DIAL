@@ -208,7 +208,7 @@ class OpenAIBatchClient:
                 "input_file_id": file_name,
                 "endpoint": "/v1/responses",
                 "completion_window": "24h",
-                "metadata": {"causal_judge_id": display_name},
+                "metadata": {"dial_judge_id": display_name},
             },
         )
         value = response.json()
@@ -242,7 +242,7 @@ class OpenAIBatchClient:
                 metadata = batch.get("metadata", {})
                 if (
                     isinstance(metadata, dict)
-                    and metadata.get("causal_judge_id") == display_name
+                    and metadata.get("dial_judge_id") == display_name
                 ):
                     return batch
             if not value.get("has_more") or not items:

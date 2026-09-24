@@ -1,13 +1,14 @@
-"""Real-data robustness study (code/plan/2026-09-06-real-data-robustness-plan.md, Section 22).
+"""Real-data study.
 
 LLM judgments are the recorded verdicts of the collected panel; the human test pool is
 the only ground truth. Sweeps (configs/real_robustness.toml):
 
-  order       A2  swapped-copy share with a canonical-first default order
-  noise       B1  injected anti-consensus / position-only judges, one-sided display, small panel
-  budget      C1  human budget n_H with the as-collected balanced LLM data
-  llm_budget  C2  LLM rows subsampled to n_L at fixed human budgets
-  spectest    B2  specification test of s_0 = alpha mu on Arena human subsets
+  order         swapped-copy share with a canonical-first default order
+  noise         injected anti-consensus / position-only judges, one-sided display, small panel
+  noise_scarce  the same with a scarce LLM base sample
+  budget        human budget n_H with the as-collected balanced LLM data
+  llm_budget    LLM rows subsampled to n_L at fixed human budgets
+  spectest      specification test of s_0 = alpha mu on Arena human subsets
 
 Methods in every cell (presented): human-only BTL; Pooled (one BTL over all
 judgments, no judge structure, no order term, plus a human-fitted scale);
@@ -21,8 +22,8 @@ stage-matched external comparison of AtC: the same human comparisons aggregated 
 isotonic projection of the LLM-only position-debiased consensus onto that ordering.
 
 Rows append to results/real_robustness/<dataset>/rows.jsonl keyed by
-(sweep, panel, kind, level, n_H, seed). Aggregation: robustness_plot.py; figures:
-notebooks/real_data_robustness.ipynb.
+(sweep, panel, kind, level, n_H, seed). Aggregation: robustness_plot.py and panel_budget.py;
+figures: notebooks/2_real_data_position.ipynb and notebooks/3_real_data_calibration.ipynb.
 """
 from __future__ import annotations
 
@@ -273,7 +274,7 @@ def clean_fit(dataset, cfg, cluster="pair", r=1):
     jt = fit_dial(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order, init_params=(st["gamma"], st["mu"], st["U"], st["V"], st["b"]), tol=1e-6, max_steps=30)
     sw = joint_sandwich(jt, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster=cluster)
     # the judge diagnostic is an LLM-side quantity, so it is reported from the LLM-only fit
-    # (the lambda = infinity fit, `st`) with the cell-clustered sandwich of app:clustered
+    # (the lambda = infinity fit, `st`) with the cell-clustered sandwich
     sw_llm = llm_only_sandwich(st, N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, cluster=cluster)
     return dict(dataset=dataset, N=N, K=K, r=r, items=panel["items"], judges=panel["judges"], dropped_judges=panel["dropped_judges"],
                 n_L=float(n_order.sum()), n_H=float(sum(p[2] for p in pairs)), n_records=panel["n_records"], n_llm_ties=panel["n_llm_ties"], n_human_decisive=panel["n_human_decisive"],
@@ -320,7 +321,7 @@ def per_dataset(value, dataset):
 
 
 def build_cell(job):
-    """The data of one cell exactly as `run_cell` fits it (shared with the boundary audit)."""
+    """The data of one cell exactly as `run_cell` fits it."""
     dataset, sweep, panel_name, kind, level, n_H_req, seed, cfg = job
     scfg, dcfg, swcfg = cfg["study"], cfg[dataset], cfg["sweeps"][sweep]
     panel = restrict_panel(get_panel(dataset, cfg), None if panel_name == "all" else cfg["panels"][panel_name])
@@ -528,7 +529,7 @@ def run_cell(job):
 
 
 def run_spectest(job):
-    """B2: LR test of s_0 = alpha mu on a human subset, with the consensus from global or subset LLM data."""
+    """LR test of s_0 = alpha mu on a human subset, with the consensus from global or subset LLM data."""
     setting, n_H, seed, cfg = job
     panel = get_panel("arena_33k", cfg)
     N, K = panel["N"], panel["K"]
@@ -620,7 +621,6 @@ def main(argv=None):
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--select-rank", action="store_true")
     p.add_argument("--clean-fit", action="store_true")
-    p.add_argument("--ja", action="store_true", help="run the JA-Ranking reanalysis (figure A1) and exit")
     p.add_argument("--methods", default=None, help="comma-separated method keys: compute only these, for cells that lack them (spectest skipped)")
     p.add_argument("--datasets", default=None, help="comma-separated datasets: restrict every sweep to these")
     p.add_argument("--panels", default=None, help="comma-separated judge panels: restrict every sweep to these")
@@ -646,14 +646,6 @@ def main(argv=None):
             (root / d).mkdir(parents=True, exist_ok=True)
             (root / d / "clean_fit.json").write_text(json.dumps(res, indent=1) + "\n")
             print(f"{d}: clean fit written, converged={res['converged']}", flush=True)
-        return
-    if a.ja:
-        from .ja_reanalysis import run as run_ja
-
-        tab, judges = run_ja(cfg)
-        pd.set_option("display.width", 250)
-        print(tab.round(3).to_string(index=False))
-        print(judges.round(3).to_string(index=False))
         return
 
     s0, s1 = (int(x) for x in a.seeds.split(":"))
@@ -695,8 +687,7 @@ def main(argv=None):
 
 
 def describe(dataset):
-    return {"study": "robustness", "dataset": dataset, "sweeps": list(SWEEPS), "methods": list(METHODS), "evaluation": "held_out_human_comparisons",
-            "status": "implemented", "plan": "code/plan/2026-09-06-real-data-robustness-plan.md (Section 22)"}
+    return {"study": "robustness", "dataset": dataset, "sweeps": list(SWEEPS), "methods": list(METHODS), "evaluation": "held_out_human_comparisons", "status": "implemented"}
 
 
 if __name__ == "__main__":

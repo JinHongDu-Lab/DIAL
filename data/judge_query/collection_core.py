@@ -1,11 +1,4 @@
-"""Verdict parsing, prompt building, and job bookkeeping.
-
-Copied verbatim (unchanged) from causal_judge/collect.py in the main
-`causal-judge` repository, keeping only the pure, self-contained pieces that
-do not depend on the SQLite success cache, account routing, or usage
-ledger. This guarantees byte-identical verdict scoring and prompt
-construction between this distilled kit and the canonical studies.
-"""
+"""Verdict parsing, prompt building, and job bookkeeping."""
 
 from __future__ import annotations
 
@@ -38,8 +31,7 @@ VERDICT_PATTERNS = (
         re.IGNORECASE,
     ),
 )
-# Some judges (observed on hku-claude-opus-4.6-low with reasoning effort
-# "low") ignore the "one line only" instruction and emit a bare choice
+# Some reasoning judges ignore the "one line only" instruction and emit a bare choice
 # letter followed by rationale, sometimes with a "Confidence: N" label
 # buried in that rationale. Recover the verdict from that shape without
 # loosening the stricter patterns above (which still reject a choice

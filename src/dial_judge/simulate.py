@@ -1,9 +1,8 @@
 """
 Synthetic data generation for the DIAL simulation study.
 
-Extends the LLM-panel DGP (mu, gamma, U, V under the HJA decomposition,
-ported from src/generate_simulation_data.py) with the human score model
-(Eq. 2.3-2.5): s^H = alpha_H * mu + V @ a (+ delta, kept 0 in the primary
+Extends the LLM-panel DGP (mu, gamma, U, V under the HJA decomposition) with
+the human score model s^H = alpha_H * mu + V @ a (+ delta, kept 0 in the primary
 model), so a simulation run has ground truth for both the LLM panel and the
 human target and can check whether DIAL's calibrated s_H recovers the human
 preference better than an LLM-only HJA fit does.
@@ -158,9 +157,9 @@ def generate_balanced_comparisons_with_order(S, b, total_comparisons, random_see
     return generate_balanced_comparisons(S, total_comparisons, random_seed=random_seed, b=b)
 
 
-def generate_plan_parameters(N, K, r, random_seed=42, heterogeneity_scale=1.0, gamma_sd=0.3):
+def generate_study_parameters(N, K, r, random_seed=42, heterogeneity_scale=1.0, gamma_sd=0.3):
     """
-    DGP of code/plan/2026-09-02-main-experiments-plan.md, Section 2.
+    DGP of the synthetic study.
 
     mu Gaussian, centered, ||mu||_2^2 = N; V Gaussian, orthonormalized against
     1 and mu with N^{-1} V^T V = I_r; gamma_k = 1 + gamma_sd z_k rescaled to sum
@@ -194,7 +193,7 @@ def generate_plan_parameters(N, K, r, random_seed=42, heterogeneity_scale=1.0, g
     return mu, gamma, U, V
 
 
-def generate_plan_position_effects(K, tau_b=1.0, random_seed=42, low=0.3, high=1.2, p_first=0.8, null_judge=True):
+def generate_study_position_effects(K, tau_b=1.0, random_seed=42, low=0.3, high=1.2, p_first=0.8, null_judge=True):
     """b_k = tau_b * beta_k, beta_k ~ U(low, high) with sign +1 w.p. p_first; optionally one near-null judge."""
     rng = np.random.default_rng(random_seed)
     beta = rng.uniform(low, high, size=K)
@@ -205,7 +204,7 @@ def generate_plan_position_effects(K, tau_b=1.0, random_seed=42, low=0.3, high=1
     return tau_b * b
 
 
-def generate_plan_calibration(V, c_mu=1.0, c_v_sd=0.5, random_seed=42):
+def generate_study_calibration(V, c_mu=1.0, c_v_sd=0.5, random_seed=42):
     """c_0 = (c_mu, c_V) with c_V ~ N(0, c_v_sd^2 I_r) for s_0 = W c_0 (exact calibration)."""
     rng = np.random.default_rng(random_seed)
     r = V.shape[1]
@@ -272,7 +271,7 @@ def generate_random_human_comparisons(s_H, total_comparisons, random_seed=42, pa
 def generate_human_comparisons(s_H, total_comparisons, random_seed=42, pair_subset=None):
     """
     Draw pooled (single-judge, K=1) human comparisons from the BTL model
-    implied by a human score vector s_H (Eq. 2.4). If `pair_subset` is
+    implied by a human score vector s_H. If `pair_subset` is
     given, only those (i, j) item pairs are sampled from (near-balanced);
     otherwise all N(N-1)/2 pairs are used.
     """

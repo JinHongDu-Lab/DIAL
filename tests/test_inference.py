@@ -21,9 +21,9 @@ from dial_judge.inference import (
 from dial_judge.simulate import (
     compute_human_score,
     compute_score_matrix,
-    generate_plan_calibration,
-    generate_plan_parameters,
-    generate_plan_position_effects,
+    generate_study_calibration,
+    generate_study_parameters,
+    generate_study_position_effects,
     generate_random_human_comparisons,
     generate_random_llm_comparisons,
 )
@@ -33,9 +33,9 @@ from dial_judge.simulate import (
 def small_problem():
     N, K, r = 8, 4, 1
     seed = 3
-    mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=seed)
-    b = generate_plan_position_effects(K, random_seed=seed + 1)
-    c_mu, c_v = generate_plan_calibration(V, random_seed=seed + 2)
+    mu, gamma, U, V = generate_study_parameters(N, K, r, random_seed=seed)
+    b = generate_study_position_effects(K, random_seed=seed + 1)
+    c_mu, c_v = generate_study_calibration(V, random_seed=seed + 2)
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, 4000, random_seed=seed + 3)
@@ -45,9 +45,9 @@ def small_problem():
     return dict(N=N, K=K, r=r, mu=mu, gamma=gamma, U=U, V=V, b=b, S=S, s0=s0, pairs=pool_pairs(hum), n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order)
 
 
-def test_plan_parameters_satisfy_constraints():
+def test_study_parameters_satisfy_constraints():
     N, K, r = 12, 5, 2
-    mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=0)
+    mu, gamma, U, V = generate_study_parameters(N, K, r, random_seed=0)
     assert abs(mu.sum()) < 1e-10 and abs(mu @ mu - N) < 1e-8
     assert abs(gamma.sum() - K) < 1e-10
     assert np.allclose(V.T @ np.ones(N), 0) and np.allclose(mu @ V, 0)
@@ -149,14 +149,14 @@ def test_pairwise_contrast_matrix():
 
 @pytest.fixture(scope="module")
 def misaligned_problem():
-    """A larger, genuinely misaligned problem (c_v_sd=0.5, main.tex fig:r1-mis's config) on
+    """A larger, genuinely misaligned problem (c_v_sd=0.5, the misaligned simulation config) on
     which GACV reliably selects an interior lambda > 0 for align='mu', unlike small_problem's
     scale where it can select the lam=0 endpoint."""
     N, K, r = 10, 4, 1
     seed = 0
-    mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=seed)
-    b = generate_plan_position_effects(K, random_seed=seed + 1)
-    c_mu, c_v = generate_plan_calibration(V, c_v_sd=0.5, random_seed=seed + 2)
+    mu, gamma, U, V = generate_study_parameters(N, K, r, random_seed=seed)
+    b = generate_study_position_effects(K, random_seed=seed + 1)
+    c_mu, c_v = generate_study_calibration(V, c_v_sd=0.5, random_seed=seed + 2)
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, 20000, random_seed=seed + 3, swap_fraction=0.25)
@@ -182,7 +182,7 @@ def test_comparison_laplacian_matches_human_only_info(small_problem):
 
 
 def test_bias_projection_operator_fixes_col_W_and_eigenvalues_bounded(misaligned_problem):
-    """prop:local-misalignment: A_lambda h = h exactly for h in col(W) at every lambda, and its
+    """Local misalignment: A_lambda h = h exactly for h in col(W) at every lambda, and its
     eigenvalues (w.r.t. the L inner product) lie in [0, 1]; both checked with finite-sample
     slack since A_lambda is a plug-in built from a fitted joint DIAL model."""
     p = misaligned_problem

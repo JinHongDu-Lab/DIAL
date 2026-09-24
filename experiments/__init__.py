@@ -1,1 +1,1 @@
-"""Paper experiment drivers for DIAL."""
+"""Experiment drivers for DIAL."""

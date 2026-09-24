@@ -1,26 +1,15 @@
-"""Study 3 -- judge panels across budget regimes (manuscript appendix G.4.2): the data behind the figures.
+"""Judge panels across budget regimes: the data behind the calibration figures.
 
-One study, three figures, one 3 x 3 grid (datasets x judge panels) in all of them:
+Appendix grids (datasets x judge panels), read from the robustness rows:
 
   fig_panel_human_budget.pdf      human budget n_H sweep, as-collected LLM data
   fig_panel_llm_budget.pdf        LLM budget n_L sweep at a fixed n_H (300 / 80 / 60)
-  fig_panel_intermediate_llm.pdf  human budget sweep at a fixed n_L (2000 / 160 / 100)
 
-plus the main-text calibration figure, which draws the Arena `all` cells of the first and third
-on one Kendall-tau axis.
+The main-text calibration figure draws the Arena `all` cells of the human-budget sweep and of the
+`intermediate_budget` run (fixed n_L = 2000) on one Kendall-tau axis.
 
-This module is data only: the loaders below return tidy per-cell means with their Monte Carlo
-s.e., and every figure is drawn in `notebooks/3_real_data_calibration.ipynb`, which is the only
-place figure code lives. It imports nothing from the fitting library, so the notebook runs from
-the stored result rows alone.
-
-The first two figures read the main robustness rows; the third reads an `intermediate_budget`
-run directory. Both sources carry the same three estimators of `experiments/style.py` -- Human,
-Cons-Cal, DIAL-mu with its GACV weight -- over the same 50 record splits, so the figures are
-directly comparable, which is why they load through one module rather than three.
-
-Data generation stays where it was: `run_real_data.py --study robustness` and
-`intermediate_budget.py`.
+This module only loads and aggregates per-cell means with their Monte Carlo s.e.; the figures are
+drawn in `notebooks/3_real_data_calibration.ipynb`.
 """
 from __future__ import annotations
 

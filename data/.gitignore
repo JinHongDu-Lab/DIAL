@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .venv/
 */batch-jobs/
+# raw collection output; the tracked copy is <study>/responses.parquet (python -m judge_query.export)
+*/results/
