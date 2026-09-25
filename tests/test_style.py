@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
-from experiments.simulation.r1_plot import normalize_schema
+from experiments.simulation.synthetic_plot import normalize_schema
 from experiments.style import LABEL, PRESENTED_W, STYLE, legend_handles, method_bars, method_lines
 
 

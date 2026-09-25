@@ -1,11 +1,10 @@
-"""Direct c/nH preference for DIAL's infinity endpoint; no extra fits or CV.
+"""Endpoint margin for GACV selection and the summary of keyed real-data runs.
 
-Run: python -m experiments.real_data.endpoint_margin --seeds 20 --workers 6
-The optional robustness-runner hook evaluates all c values on the same fit path.
+The margin rule keeps DIAL's infinity endpoint unless the best finite weight improves GACV by more
+than c / n_H; it reuses the GACV path, so it needs no extra fits.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import math
 from pathlib import Path
@@ -72,46 +71,3 @@ def summarize(root):
                 fallback_margin_rows=int((x.get('margin_reason') == 'all_irregular_fallback').sum()))
     (root / 'diagnostics.json').write_text(json.dumps(diag, indent=2) + '\n')
     print(diag, flush=True)
-
-
-def main():
-    from . import robustness as rb
-    from ._runner import completed_keys, run_keyed_jobs, write_design
-
-    p = argparse.ArgumentParser()
-    p.add_argument('--seeds', type=int, default=20)
-    p.add_argument('--workers', type=int, default=6)
-    p.add_argument('--summarize', action='store_true')
-    p.add_argument('--out', type=Path)
-    p.add_argument('--panels', nargs='+', default=['all', 'small6'])
-    a = p.parse_args()
-
-    root = a.out or rb.ROOT / 'results' / 'endpoint_margin'
-    root.mkdir(parents=True, exist_ok=True)
-    if a.summarize:
-        summarize(root)
-        return
-
-    cfg = rb.load_config()
-    cfg['_only_methods'] = ['consensus_cal', 'dial_mu']
-    cfg['_gacv_endpoint_margins'] = [.5, 1., 2.]
-    for sweep in ('budget', 'llm_budget'):
-        cfg['sweeps'][sweep]['panels'] = a.panels
-    cfg['sweeps']['llm_budget']['n_H_grid'] = {d: [cfg[d]['n_H']] for d in cfg['study']['datasets']}
-    write_design(root / 'design.json', dict(
-        seeds=a.seeds, config=cfg,
-        rule='infinity if GACV(infinity)-min_finite_GACV <= c/nH; same regularity guards; c not selected using test results'),
-        strict=False)   # --panels may legitimately differ between runs into one directory
-
-    def key_of(job):
-        return (job[0],) + rb.job_key(job)
-
-    done = completed_keys(root / 'jobs.jsonl')
-    jobs = [j for sweep in ('budget', 'llm_budget') for j in rb.jobs_for(sweep, cfg, range(a.seeds))
-            if key_of(j) not in done]
-    run_keyed_jobs(jobs, rb.run_cell, root / 'jobs.jsonl', key_of, workers=a.workers)
-    summarize(root)
-
-
-if __name__ == '__main__':
-    main()

@@ -9,7 +9,7 @@
       "api_key_env": "OPENAI_API_KEY"
     },
     "anthropic-primary": {
-      "api_key_env": "ANTROPIC_API_KEY"
+      "api_key_env": "ANTHROPIC_API_KEY"
     }
   },
   "batch_token_budgets": {

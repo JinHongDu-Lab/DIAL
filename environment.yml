@@ -1,26 +1,19 @@
-# Conda environment for the DIAL experiments (the `llm` env used to produce the paper's figures).
-#
-#   conda env create -f environment.yml && conda activate dial
-#   pip install -e .            # installs src/dial_judge itself
-#
-# Version floors mirror pyproject.toml (base + dev + viz + data extras); the comments record the
-# versions the reported results were produced with on macOS/arm64, 2026-09.
+# conda env create -f environment.yml && conda activate dial && python -m pip install -e .
 name: dial
 channels:
   - conda-forge
 dependencies:
-  - python >=3.10,<3.13        # 3.11.15
-  - numpy >=1.24               # 2.4.6
-  - scipy >=1.10               # 1.17.1
-  - pandas >=2.0               # 3.0.5
-  - matplotlib-base >=3.7      # 3.11.1
-  - seaborn >=0.13             # 0.13.2  (the shared drawing helpers of experiments/style.py)
-  - pyarrow >=15,<26           # 25.0.0  (results/cache/*.parquet)
+  - python >=3.11,<3.13
+  - numpy >=1.24
+  - scipy >=1.10
+  - pandas >=2.0
+  - matplotlib-base >=3.7
+  - seaborn >=0.13
+  - pyarrow >=15,<26
   - httpx >=0.27,<1
   - tiktoken >=0.13,<1
-  - ipykernel >=6              # notebooks/*.ipynb run under this kernel
-  - nbconvert >=7              # headless re-execution of the two figure notebooks
-  - pymupdf >=1.24             # inspecting the rendered figure PDFs
+  - ipykernel >=6
+  - nbconvert >=7
   - pytest >=8
   - pytest-cov >=5
   - pip

@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "study_id": "position_and_anonymity",
-  "dataset_sha256": "878d3be20e02c4b4c37f3896775d625f5cfbb73045eeaf8af720a0bf0301e6f8",
-  "judge": "anthropic-claude-haiku-4.5-batch-direct",
-  "judge_model": "claude-haiku-4-5-20251001",
-  "config_fingerprint": "ff7f79c7778a5985",
-  "prompt_fingerprint": "41d9716bc333a1c650d0bfebadbb0b55106d19e4224327d0632d55e45e6b47bb"
-}

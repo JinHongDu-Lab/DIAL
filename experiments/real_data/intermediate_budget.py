@@ -1,4 +1,4 @@
-"""Exploratory human-budget sweep at the prechosen middle G7 LLM budgets."""
+"""Human-budget sweep at a fixed intermediate LLM budget (main-text calibration figure)."""
 from __future__ import annotations
 
 import argparse
@@ -10,8 +10,8 @@ from .endpoint_margin import summarize
 
 LLM_LEVELS = {"arena_33k": [2000], "mt_bench": [160], "pandalm": [100]}
 PANELS = ["small6", "large6", "all"]
-PURPOSE = ("Fixed intermediate human-budget sweep; LLM budgets fixed to middle G7 levels before "
-           "inspecting outcomes; c=1 fixed; no test-based selection.")
+PURPOSE = ("Human-budget sweep at the middle LLM budget of the llm_budget sweep, fixed before "
+           "inspecting outcomes; endpoint margin c = 1; no test-based selection.")
 
 
 def build_config(methods=None, datasets=None, panels=None):
@@ -28,16 +28,16 @@ def build_config(methods=None, datasets=None, panels=None):
     return cfg
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--seeds", type=int, default=5)
     p.add_argument("--workers", type=int, default=8)
-    p.add_argument("--out", type=Path, default=Path("/tmp/dial-intermediate-budget"))
+    p.add_argument("--out", type=Path, default=rb.ROOT / "results" / "intermediate_budget")
     p.add_argument("--methods", default=None, help="comma-separated method keys for an add-on pass over the same cells")
     p.add_argument("--datasets", default=None, help="comma-separated datasets (default: all three)")
     p.add_argument("--panels", default=None, help="comma-separated judge panels (default: all three)")
     p.add_argument("--tag", default=None, help="suffix of the pass's own jobs/design files, e.g. `atc`")
-    a = p.parse_args()
+    a = p.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     split = lambda v: [x.strip() for x in v.split(",")] if v else None
 

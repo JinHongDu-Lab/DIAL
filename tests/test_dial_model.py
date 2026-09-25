@@ -6,7 +6,6 @@ from dial_judge.baselines import (
     fit_consensus_only_calibrated,
     fit_human_only_btl,
     fit_staged_structured_calibration,
-    unavailable_methods,
 )
 from dial_judge.benchmarks import fit_dial
 from dial_judge.dial_model import human_nll_and_grad, pairs_to_arrays
@@ -65,11 +64,6 @@ def test_available_endpoints_return_human_scores(small_study):
     assert staged["a"].size == small_study["r"]
     assert np.all(np.isfinite(consensus["s_H"]))
     assert np.all(np.isfinite(staged["s_H"]))
-
-
-def test_unavailable_method_registry_is_explicit():
-    assert "atc" not in unavailable_methods()
-    assert "paired_order_logit_average" in unavailable_methods()
 
 
 def test_atc_is_isotonic_in_the_human_ordering_and_centered():

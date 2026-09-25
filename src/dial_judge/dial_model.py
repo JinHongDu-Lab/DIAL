@@ -1,5 +1,5 @@
 """
-DIAL joint estimator (paper Section 5.1, Eq. 14).
+DIAL joint estimator.
 
 Position-debiased LLM scores follow the HJA factorization S = gamma*mu^T + U V^T
 inside the order-effect BTL

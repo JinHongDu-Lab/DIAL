@@ -3,8 +3,8 @@ Unified fit_* interface.
 
 Methods:
   - fit_hja: LLM-panel HJA, optionally with position-effect BTL
-  - fit_dial / fit_dial_joint: DIAL weighted joint estimator (paper Eq. 14)
-  - fit_dial_gacv: same estimator with GACV-selected lambda (paper Eq. 18)
+  - fit_dial / fit_dial_joint: DIAL weighted joint estimator
+  - fit_dial_gacv: same estimator with GACV-selected lambda
 """
 import numpy as np
 

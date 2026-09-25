@@ -84,7 +84,7 @@ def contrast_intervals(s, cov_s, alpha=0.05):
 # ---------------------------------------------------------------------------
 
 def comparison_laplacian(N, human_pairs, s, normalize=True):
-    """Empirical comparison Laplacian \\eqref{eq:comparison-laplacian} at plug-in score `s`.
+    """Empirical comparison Laplacian at plug-in score `s`.
 
     sum_{(i,j)} w_ij p_ij(1-p_ij) (e_i-e_j)(e_i-e_j)^T, w_ij the pair count.
     With normalize=True (default) divides by n_H = sum(w_ij), giving the per-observation
@@ -172,8 +172,7 @@ def llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_or
     cluster=None: observations independent given the cell (binomial), centered closed form.
     cluster="pair": cluster-robust version treating all queries of judge k on pair (i, j)
     (both display orders) as one cluster, V_L = n_L^{-1} sum_c (sum_{u in c} (g_u - g_bar))(...)^T
-    with g_bar the grand-mean per-observation score (manuscript, paragraph "Comparisons that share
-    a prompt"). This is the appropriate variance when repeated queries of the same pair share an
+    with g_bar the grand-mean per-observation score. This is the appropriate variance when repeated queries of the same pair share an
     unmodeled pair-level effect.
     """
     X, n_c, y_c, eta, cl = _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, return_cluster=True)
@@ -184,7 +183,7 @@ def llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_or
         raw = (X * second[:, None]).T @ X / n_L
         g_bar = X.T @ (n_c * p - y_c) / n_L
         return raw - np.outer(g_bar, g_bar), n_L
-    # manuscript form (app:clustered): sum over clusters of the summed centered per-observation
+    # clustered form: sum over clusters of the summed centered per-observation
     # scores, sum_{u in cluster} (g_u - g_bar) = g_c - n_c g_bar, with g_bar the grand mean score.
     resid = n_c * p - y_c  # cell-level summed residual
     g_bar = X.T @ resid / n_L
@@ -297,7 +296,7 @@ def llm_only_sandwich(fit, N, K, r, n_ijk=None, y_ijk=None, n_order=None, y_orde
                       alpha=0.05, rcond=1e-9, hess_eps=1e-5, cluster="pair"):
     """Cluster-robust Wald intervals for b from the LLM-only structured fit (the lambda = infinity fit).
 
-    Same cell-clustered meat as `joint_sandwich` (app:clustered), specialized to the LLM block:
+    Same cell-clustered meat as `joint_sandwich`, specialized to the LLM block:
     the criterion is ell_L / n_L alone, so
 
         Cov(zeta_hat) ~= H_L^{-1} V_L^{cell} H_L^{-1} / n_L,
@@ -349,11 +348,11 @@ def llm_only_sandwich(fit, N, K, r, n_ijk=None, y_ijk=None, n_order=None, y_orde
 
 
 # ---------------------------------------------------------------------------
-# Interval validity under local misalignment (prop:local-misalignment)
+# Interval validity under local misalignment
 # ---------------------------------------------------------------------------
 
 def bias_projection_operator(dot_s0, H, L, rcond=1e-9):
-    """A_lambda := dot_s0 H_lambda^{-1} dot_s0^T L (main.tex eq. around line 2778).
+    """A_lambda := dot_s0 H_lambda^{-1} dot_s0^T L.
 
     L-self-adjoint (w.r.t. <x,y>_L = x^T L y), eigenvalues in [0,1] nonincreasing in
     lambda, A_lambda h = h for h in col(W), and A_lambda -> P^L_W as lambda -> infty
@@ -385,8 +384,8 @@ def noncentrality_interval(T, df, level=0.90):
     (1 - level)/2 (zero when T is below the corresponding central quantile); the upper end
     is the smallest noncentrality whose lower tail below T has mass at most (1 - level)/2.
     Dividing both ends by 2 n_H gives the interval for Delta_W under the first-order
-    approximation E[T] = df + 2 n_H Delta_W of app:calibration-test (also the delta_W of the
-    "Interval validity under local misalignment" widening, since delta_W = n_human Delta_W and
+    approximation E[T] = df + 2 n_H Delta_W of the calibration test (also the delta_W of the
+    local-misalignment widening, since delta_W = n_human Delta_W and
     the n_human factors cancel against the widening formula's own 1/sqrt(n_human): see
     misalignment_widened_contrasts).
     """
@@ -415,14 +414,13 @@ def noncentrality_interval(T, df, level=0.90):
 
 def misalignment_widened_contrasts(sw, N, human_pairs, s_full, delta_hi, alpha=0.05, rcond=1e-9, D=None):
     """Widen the pairwise-contrast intervals of `sw = joint_sandwich(...)` for asymptotic
-    coverage under local misalignment (main.tex, "Interval validity under local
-    misalignment", lines ~2883-2888).
+    coverage under local misalignment.
 
     `s_full` is a consistent human-only estimate of s_human (e.g. `calibration_restriction_test`'s
     "s_full"), used only to plug into the empirical comparison Laplacian L.
     `delta_hi` is the upper end of a confidence interval for Delta_W at the pilot used to fit
     `sw` (e.g. the upper end of `noncentrality_interval` divided by 2 n_human), standing in for the confidence upper bound on delta_W = n_human * Delta_W
-    per app:calibration-test; the n_human factor cancels against the widening formula's own
+    of the calibration test; the n_human factor cancels against the widening formula's own
     1/sqrt(n_human), so the widening below is kappa(d,lambda) * sqrt(2 * delta_hi) exactly,
     with no separate n_human term.
 
@@ -455,7 +453,7 @@ def calibration_restriction_test(N, human_pairs, W, maxiter=1000, firth_fallback
 
     Statistic 2 { L_H(c-hat; W) - L_H^full(s-hat_0) } with L_H the total human negative
     log-likelihood, compared with chi-square on (N - 1) - d degrees of freedom, d = W.shape[1]
-    (manuscript app:spec-test; W treated as known, i.e. the n_H / n_L -> 0 regime).
+    (W treated as known, i.e. the n_H / n_L -> 0 regime).
     Returns the statistic, degrees of freedom, p-value, both fitted scores, and whether the
     unrestricted MLE exists (`btl_mle_exists`).
 

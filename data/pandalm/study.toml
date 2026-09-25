@@ -4,19 +4,12 @@ version = 1
 id = "position_and_anonymity"
 title = "Position (PandaLM)"
 description = "Measure response-position effects, always judged anonymously, on PandaLM's human-annotated test set (majority vote across 3 annotators per example)."
-guidelines = "GUIDELINES.md"
 dataset = "data/pandalm_prepared.parquet"
 dataset_rows = 945
 dataset_sha256 = "878d3be20e02c4b4c37f3896775d625f5cfbb73045eeaf8af720a0bf0301e6f8"
 api_config = "../configs/apis.json"
 judge_config = "../configs/judges.json"
 judges = [
-    # Distilled panel: the "remaining judges" set from
-    # plan/2026-08-20-remaining-judge-coverage.md plus every Ollama
-    # DeepSeek R1 size. Excludes ollama-qwq-32b-low and
-    # ollama-phi4-reasoning-14b-low, which that coverage doc's panel
-    # definition excludes.
-
     # OpenAI
     "openai-gpt-4.1-nano-batch-direct",   # paid, cheapest OpenAI batch model
     "ollama-gpt-oss-20b-low",             # free, open-weight OpenAI model (reasoning cannot be disabled on this Ollama build)

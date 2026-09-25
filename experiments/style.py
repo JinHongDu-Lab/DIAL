@@ -4,8 +4,7 @@ Five presented methods, in this order, with one name, colour, marker, and line
 style each; the appendix-only diagnostics follow. Figures that draw both
 alignments use `PRESENTED_W`, which inserts DIAL-$W$ after DIAL-$\mu$. Both
 notebooks import the panel and `RCPARAMS` from here, so the two studies share
-their method order, colours, and fonts (plan:
-code/plan/2026-09-07-unified-method-panel-plan.md).
+their method order, colours, and fonts.
 """
 
 import matplotlib as mpl
@@ -40,7 +39,7 @@ STYLE = {
     "consensus_cal": dict(color="#1baf7a", ls="-", marker="v", lw=1.2),
     "dial_mu": dict(color="#c0392b", ls="-", marker="o", lw=2.0),
     "dial_nodeb": dict(color="#eb6834", ls=":", marker="^", lw=1.2),
-    # stage-matched external comparison for the human-calibration stage (Figure 4 only)
+    # stage-matched external comparison for the human-calibration stage (main-text calibration figure only)
     "atc_btl": dict(color="#b8860b", ls="--", marker="D", lw=1.1),
     "dial_w": dict(color="#2a78d6", ls="-", marker="s", lw=1.2),
     "staged_w": dict(color="#7fb2e5", ls="--", marker="D", lw=1.0),

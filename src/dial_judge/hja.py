@@ -2,14 +2,12 @@
 Core HJA model: S = gamma * mu^T + U V^T for a panel of judges.
 
 When order-specific counts n_order/y_order are supplied, the likelihood is the
-position-effect BTL (DIAL paper Eq. 1):
+position-effect BTL:
 
     logit(p_kij^(a)) = S_ki - S_kj + a * b_k
 
-Self-contained port of src/models.py so the DIAL package does not depend on
-the original src/ package at import time. The algorithm (anchored alternating
-MLE, ReAnchor, delta-method UQ, BIC rank selection) is unchanged from
-src/models.py, with position effects added as judge-specific parameters b.
+The algorithm (anchored alternating MLE, ReAnchor, delta-method UQ, BIC rank
+selection) follows HJA, with position effects added as judge-specific parameters b.
 """
 import time
 from functools import lru_cache
@@ -73,7 +71,7 @@ def negative_log_likelihood(mu, gamma, U, V, n_ijk, y_ijk, b=None, n_order=None,
 
 
 def negative_log_likelihood_and_grad(mu, gamma, U, V, n_ijk, y_ijk, b=None, n_order=None, y_order=None):
-    # logit(p_kij^(a)) = S_ki - S_kj + a * b_k  (paper Eq. 1). When n_order is
+    # logit(p_kij^(a)) = S_ki - S_kj + a * b_k. When n_order is
     # None this reduces to the original HJA likelihood (b = 0).
     score = np.outer(gamma, mu) + U @ V.T
     K, N = score.shape
@@ -262,7 +260,7 @@ def fit_centered_btl_from_pairs(N, pairs, initial=None, maxiter=500):
 
 def firth_penalized_loss_and_grad(N, pairs, s, arrays=None):
     """Firth-penalized centered BTL objective NLL(s) - (1/2) log det J(s) and its gradient, with
-    J(s) the centered Fisher information (comparison Laplacian of app:clustered) restricted to
+    J(s) the centered Fisher information (the comparison Laplacian) restricted to
     the zero-sum subspace via `make_centering_basis`. See `fit_centered_btl_firth`.
 
     The log-determinant gradient uses the standard hat-matrix identity
@@ -298,7 +296,7 @@ def fit_centered_btl_firth(N, pairs, initial=None, maxiter=500):
     `calibration_restriction_test`. This is a standard
     bias-reduction heuristic (bias O(1/n) versus the plain MLE's O(1/sqrt(n)), Firth 1993); using
     it specifically to replace a non-existent MLE is outside what that asymptotic argument covers
-    and is validated empirically rather than proved (see the manuscript remark).
+    and is validated empirically rather than proved.
     """
     arrays = _pairs_arrays(pairs)
 

@@ -1,12 +1,12 @@
 """
-GACV selection of the DIAL LLM weight lambda (paper Section 5.3, Eq. 18).
+GACV selection of the DIAL LLM weight lambda.
 
 For a finite candidate set Lambda subset (0, inf),
 
     GACV(lambda) = ell_H^full(s_hat_lambda) + 1/(n_H - 1) tr(H_hat^{-1} J_hat)
 
 approximates leave-one-human-comparison-out predictive loss while keeping all
-LLM comparisons in every candidate fit (Theorem 5). Coordinates are the
+LLM comparisons in every candidate fit. Coordinates are the
 centering-reduced factor chart (gamma, U, b, mu, V, c) used by the joint
 alternating algorithm; the trace is invariant to a smooth change of chart.
 """
@@ -478,7 +478,7 @@ def select_lambda(
 
     The grid is traversed from the largest lambda downward; the first fit is
     initialized from the LLM-only staged fit (computed here unless `staged_fit`
-    is passed) and each subsequent fit from the previous one (plan Algorithm 1).
+    is passed) and each subsequent fit from the previous one.
     With `guard`, finite-lambda candidates whose fit is non-convergent, box-active
     (a chart coordinate on the finite-fit box, `fit_info["boundary_any"]`), or whose
     criterion Hessian is singular beyond the chart's exact invariances are excluded

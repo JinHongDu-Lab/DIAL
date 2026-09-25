@@ -1,11 +1,4 @@
-"""Shared resumable job runner for the real-data side studies.
-
-Every side study (`endpoint_margin`, `intermediate_budget`, `llm_thinning`, ...) runs a list
-of independent cells in a process pool, appends the results to a JSONL file, and is expected
-to resume after an interrupt by skipping the cells already in that file. The two shapes used
-are a keyed file (one `{"key": ..., "rows": [...]}` line per cell, resumable by key) and a
-flat file (one result row per line). Both live here so the studies keep only their design.
-"""
+"""Resumable process-pool runner: one `{"key": ..., "rows": [...]}` JSONL line per cell."""
 from __future__ import annotations
 
 import json
@@ -46,26 +39,14 @@ def run_keyed_jobs(jobs, fn, dest, key_of, workers=8, every=25, label="cells"):
             _progress(count, len(jobs), start, every, label)
 
 
-def run_row_jobs(jobs, fn, dest, workers=8, every=10, label="jobs"):
-    """Run `fn(job)` over `jobs`, appending each returned row to `dest` as its own JSONL line."""
-    jobs = list(jobs)
-    dest = Path(dest)
-    print(f"{len(jobs)} {label}", flush=True)
-    start = time.monotonic()
-    with dest.open("a") as handle, ProcessPoolExecutor(max_workers=workers) as pool:
-        for count, rows in enumerate(pool.map(fn, jobs), 1):
-            for row in rows:
-                handle.write(json.dumps(row) + "\n")
-            handle.flush()
-            _progress(count, len(jobs), start, every, label)
-
-
 def write_design(path, design, strict=True):
     """Record a study's design.
 
-    With `strict`, refuse to mix a changed design into a directory that already holds results.
+    With `strict`, refuse to mix a changed design into a directory that already holds results
+    (the free-text `purpose` is not compared).
     """
     path = Path(path)
-    if strict and path.exists() and json.loads(path.read_text()) != design:
+    strip = lambda d: {k: v for k, v in d.items() if k != "purpose"}
+    if strict and path.exists() and strip(json.loads(path.read_text())) != strip(design):
         raise SystemExit(f"{path} records a different design; use a fresh output directory.")
     path.write_text(json.dumps(design, indent=2) + "\n")

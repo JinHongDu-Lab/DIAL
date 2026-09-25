@@ -10,17 +10,17 @@ from dial_judge.data import comparisons_to_aggregated, comparisons_to_order_aggr
 from dial_judge.gacv import select_lambda
 from dial_judge.inference import joint_sandwich
 from dial_judge.simulate import (
-    compute_human_score, compute_score_matrix, generate_plan_calibration, generate_plan_parameters,
-    generate_plan_position_effects, generate_random_human_comparisons, generate_random_llm_comparisons,
+    compute_human_score, compute_score_matrix, generate_study_calibration, generate_study_parameters,
+    generate_study_position_effects, generate_random_human_comparisons, generate_random_llm_comparisons,
 )
 
 
 @pytest.fixture(scope="module")
 def data():
     N, K, r = 8, 4, 1
-    mu, gamma, U, V = generate_plan_parameters(N, K, r, random_seed=3)
-    b = generate_plan_position_effects(K, random_seed=4)
-    c_mu, c_v = generate_plan_calibration(V, c_v_sd=0.0, random_seed=5)      # rank-0 aligned human target
+    mu, gamma, U, V = generate_study_parameters(N, K, r, random_seed=3)
+    b = generate_study_position_effects(K, random_seed=4)
+    c_mu, c_v = generate_study_calibration(V, c_v_sd=0.0, random_seed=5)      # rank-0 aligned human target
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
     llm = generate_random_llm_comparisons(S, b, 6000, random_seed=6, swap_fraction=0.25)
