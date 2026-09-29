@@ -7,7 +7,21 @@
 <dataset>/prompts/           judge system and user prompts
 configs/                     judge (judges.json) and provider (apis.json) catalogs
 judge_query/                 collection kit
+huggingface/                 dataset card and upload script for the Hugging Face mirror
 ```
+
+The same files are mirrored on the Hugging Face Hub as
+[`CSML/DIAL`](https://huggingface.co/datasets/CSML/DIAL); one config per file:
+
+```python
+from datasets import load_dataset
+
+responses = load_dataset("CSML/DIAL", "mt_bench_responses", split="train")
+benchmark = load_dataset("CSML/DIAL", "mt_bench_benchmark", split="train")
+```
+
+`python huggingface/upload.py --repo-id CSML/DIAL` re-publishes this directory after
+`hf auth login`; `--stage <dir>` writes the Hub layout locally without uploading.
 
 ## Benchmarks
 

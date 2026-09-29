@@ -17,6 +17,9 @@ pytest -m 'not slow'
 `data/<dataset>/` holds the prepared benchmark (`data/*.parquet`) and every collected judge
 response (`responses.parquet`) for Chatbot Arena, MT-Bench, and PandaLM. See
 [data/README.md](data/README.md) for provenance, the response schema, and the collection kit.
+The data are also on the Hugging Face Hub as
+[`CSML/DIAL`](https://huggingface.co/datasets/CSML/DIAL)
+(`load_dataset("CSML/DIAL", "mt_bench_responses")`).
 
 ## Reproducing the paper
 
