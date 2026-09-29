@@ -67,14 +67,16 @@ Every file is plain Parquet, so `pandas.read_parquet` on the raw files works as 
 
 | Config prefix | Source | Human label |
 |---|---|---|
-| `arena_33k` | a 7,738-record subset of [Chatbot Arena conversations (33K)](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) | the Arena vote |
+| `arena_33k` | [Chatbot Arena conversations (33K)](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations), restricted to the records covered by the Judge-Aware Ranking framework's judge-vs-human comparisons ([Xu et al., 2026](https://github.com/TanXZfra/Judge-Aware-Ranking-Framework-for-LLMs)) | the Arena vote |
 | `mt_bench` | [MT-Bench human judgments](https://huggingface.co/datasets/lmsys/mt_bench_human_judgments), turn 1 | majority vote over annotators per (question, model pair) |
 | `pandalm` | [PandaLM](https://github.com/WeOpenML/PandaLM) human-annotated test set | majority vote over 3 annotators |
 
 Each benchmark row has `id`, `model_a`, `model_b`, `winner` (`model_a`, `model_b`, `tie`, or, for
 Arena, `both_bad`), `prompt`, `response_a`, and `response_b`, plus source-specific columns such as
-`language` (Arena; 89% English), `question_id`, and `num_human_annotators`; the Arena file also carries
-auxiliary single-judge fields (`ja_judge_*`) from the subset construction that the paper does not use.
+`language` (Arena; 89% English), `question_id`, and `num_human_annotators`.
+The Arena file also carries the Judge-Aware Ranking release's own single-judge verdict for each record
+(`ja_judge_model`, `ja_judge_preferred_model_original_order`, `ja_judge_confidence`), redistributed from
+their data; the DIAL paper does not use these columns.
 
 ## Judge responses
 
@@ -134,7 +136,7 @@ The non-commercial term on the Arena model outputs is what sets the license of t
 }
 ```
 
-Please also cite the source benchmarks:
+Please also cite the source benchmarks and, for the Arena subset, the Judge-Aware Ranking framework:
 
 ```bibtex
 @inproceedings{zheng2023mtbench,
@@ -157,5 +159,11 @@ Please also cite the source benchmarks:
   author    = {Wang, Yidong and Yu, Zhuohao and Yao, Wenjin and Zeng, Zhengran and Yang, Linyi and Wang, Cunxiang and Chen, Hao and Jiang, Chaoya and Xie, Rui and Wang, Jindong and Xie, Xing and Ye, Wei and Zhang, Shikun and Zhang, Yue},
   booktitle = {The Twelfth International Conference on Learning Representations},
   year      = {2024}
+}
+@inproceedings{xu2026judgeaware,
+  title     = {A Judge-Aware Ranking Framework for Evaluating Large Language Models without Ground Truth},
+  author    = {Xu, Mingyuan and Tan, Xinzi and Wu, Jiawei and Zhou, Doudou},
+  booktitle = {Forty-third International Conference on Machine Learning},
+  year      = {2026}
 }
 ```
