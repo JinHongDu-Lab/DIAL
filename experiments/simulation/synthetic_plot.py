@@ -16,11 +16,11 @@ import pandas as pd
 
 COLS = [
     ("excess", "excess human risk", True),
-    ("kendall", "Kendall $\\tau(\\hat s, s_0)$", False),
+    ("kendall", "Kendall $\\tau(\\hat s, s_{\\mathrm{H}})$", False),
     ("cov_s", "95% CI coverage", False),
     ("b_rmse", "RMSE$(\\hat b, b)$", True),
     ("sign_acc", "pairwise sign accuracy", False),
-    ("spearman", "Spearman$(\\hat s, s_0)$", False),
+    ("spearman", "Spearman$(\\hat s, s_{\\mathrm{H}})$", False),
     ("S_mse", "MSE(Ŝ, S)", True),
     ("cov_s_iid", "coverage, binomial sandwich", False),
 ]
