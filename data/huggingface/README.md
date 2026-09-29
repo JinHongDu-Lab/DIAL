@@ -67,14 +67,14 @@ Every file is plain Parquet, so `pandas.read_parquet` on the raw files works as 
 
 | Config prefix | Source | Human label |
 |---|---|---|
-| `arena_33k` | [Chatbot Arena conversations (33K)](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations), restricted to the records covered by the Judge-Aware Ranking framework's judge-vs-human comparisons (Xu et al., 2026) | the Arena vote |
+| `arena_33k` | a 7,738-record subset of [Chatbot Arena conversations (33K)](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) | the Arena vote |
 | `mt_bench` | [MT-Bench human judgments](https://huggingface.co/datasets/lmsys/mt_bench_human_judgments), turn 1 | majority vote over annotators per (question, model pair) |
 | `pandalm` | [PandaLM](https://github.com/WeOpenML/PandaLM) human-annotated test set | majority vote over 3 annotators |
 
 Each benchmark row has `id`, `model_a`, `model_b`, `winner` (`model_a`, `model_b`, `tie`, or, for
 Arena, `both_bad`), `prompt`, `response_a`, and `response_b`, plus source-specific columns such as
-`language` (Arena; 89% English), `question_id`, `num_human_annotators`, and the Judge-Aware Ranking
-judge fields (`ja_judge_*`) used to select the Arena subset.
+`language` (Arena; 89% English), `question_id`, and `num_human_annotators`; the Arena file also carries
+auxiliary single-judge fields (`ja_judge_*`) from the subset construction that the paper does not use.
 
 ## Judge responses
 
@@ -134,6 +134,28 @@ The non-commercial term on the Arena model outputs is what sets the license of t
 }
 ```
 
-Please also cite the source benchmarks: Chatbot Arena (Chiang et al., 2024; Zheng et al., 2023),
-MT-Bench (Zheng et al., 2023), PandaLM (Wang et al., 2024), and the Judge-Aware Ranking framework
-(Xu et al., 2026) for the Arena subset.
+Please also cite the source benchmarks:
+
+```bibtex
+@inproceedings{zheng2023mtbench,
+  title     = {Judging {LLM}-as-a-Judge with {MT}-Bench and Chatbot Arena},
+  author    = {Zheng, Lianmin and Chiang, Wei-Lin and Sheng, Ying and Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and Lin, Zi and Li, Zhuohan and Li, Dacheng and Xing, Eric P. and Zhang, Hao and Gonzalez, Joseph E. and Stoica, Ion},
+  booktitle = {Advances in Neural Information Processing Systems},
+  volume    = {36},
+  pages     = {46595--46623},
+  year      = {2023}
+}
+@inproceedings{chiang2024chatbot,
+  title     = {Chatbot Arena: An Open Platform for Evaluating {LLM}s by Human Preference},
+  author    = {Chiang, Wei-Lin and Zheng, Lianmin and Sheng, Ying and Angelopoulos, Anastasios N. and Li, Tianle and Li, Dacheng and Zhu, Banghua and Zhang, Hao and Jordan, Michael I. and Gonzalez, Joseph E. and Stoica, Ion},
+  booktitle = {International Conference on Machine Learning},
+  pages     = {8359--8388},
+  year      = {2024}
+}
+@inproceedings{wang2024pandalm,
+  title     = {{PandaLM}: An Automatic Evaluation Benchmark for {LLM} Instruction Tuning Optimization},
+  author    = {Wang, Yidong and Yu, Zhuohao and Yao, Wenjin and Zeng, Zhengran and Yang, Linyi and Wang, Cunxiang and Chen, Hao and Jiang, Chaoya and Xie, Rui and Wang, Jindong and Xie, Xing and Ye, Wei and Zhang, Shikun and Zhang, Yue},
+  booktitle = {The Twelfth International Conference on Learning Representations},
+  year      = {2024}
+}
+```
