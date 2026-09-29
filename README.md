@@ -1,5 +1,11 @@
 # DIAL
 
+[![arXiv](https://img.shields.io/badge/arXiv-2609.31215-b31b1b.svg)](https://arxiv.org/abs/2609.31215)
+[![Dataset on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-CSML%2FDIAL-yellow)](https://huggingface.co/datasets/CSML/DIAL)
+[![tests](https://github.com/JinHongDu-Lab/DIAL/actions/workflows/tests.yml/badge.svg)](https://github.com/JinHongDu-Lab/DIAL/actions/workflows/tests.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Code and data for DIAL: position-debiased preferences from a panel of LLM judges, calibrated to
 limited human comparisons.
 
