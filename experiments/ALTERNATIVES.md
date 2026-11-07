@@ -69,3 +69,18 @@ row varies rho in {0, 0.1, 0.2, 0.3, 0.5, 0.75, 1} at n_H in {200, 800} (the row
 carries rho, stored as `rho_orth`). Each row records `delta_mu`, `delta_W` (Theorem 3's
 population approximation errors), `nH_delta_mu`, `nH_delta_W`, and the crossover values
 `crossover_mu` = (N - 2)/2 and `crossover_W` = (N - 2 - r)/2.
+
+## Group 4: record-level bootstrap (R1-W4, R1-Q4, R2-W2(ii))
+
+```bash
+python -m experiments.simulation.record_bootstrap --config main10_record --seeds 0:50 --B 200 --workers 5
+python -m experiments.real_data.record_bootstrap --datasets arena_33k,mt_bench --levels 200,800 --seeds 0:10 --B 200 --workers 4
+```
+
+`main10_record` is the matched design with a record effect delta_t ~ N(0, record_sd^2) shared by the
+K judges and the human label of a record (`record` row: record_sd in {0, 0.5, 1} at n_H in {200, 800}).
+Both runners refit DIAL-Ada, GACV selection included, on B record-level bootstrap replicates
+(records resampled within the labeled and proxy-only strata) and compare with the sandwich at the
+selected weight; at the lambda = infinity endpoint the sandwich is evaluated at the largest finite
+grid weight (`sand_lam`, deviation `sand_dev`). Outputs: `results/alternatives/simulation/main10_record/bootstrap.jsonl`,
+`results/alternatives/bootstrap/rows.jsonl`.

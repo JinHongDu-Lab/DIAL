@@ -94,6 +94,12 @@ CONFIGS = {
 # add-on methods (run by `--addon`, written to a separate file): PPI++ with the best
 # single judge or the panel majority as proxy (defined only on a matched design), ridge toward the
 # LLM consensus, and the Firth-penalized human fit
+# ICLR 2027 group 4 (R1-W4, R1-Q4): matched design with a record-level effect shared by the K judges and
+# the human label of a record; the `record` row varies record_sd at two human budgets and is run by
+# experiments/simulation/record_bootstrap.py (sandwich against record-level bootstrap intervals).
+CONFIGS["main10_record"] = dict(N=10, K=4, r=1, n_L_fixed=2000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0, matched=True,
+                                record_n_H_grid=[200, 800], record_sd_grid=[0.0, 0.5, 1.0], n_H_grid=[200, 800], n_L_grid=[2000])
+
 ADDON_METHODS = ["ppi_bt_best", "ppi_bt_panel", "ridge_mu", "human_firth"]
 METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_mu", "oracle_w"]
 
@@ -105,6 +111,8 @@ def cells_for(cfg, row):
         return [(c["n_L_fixed"], c["n_H_fixed"], sp) for sp in c["sigma_pos_grid"]]
     if row == "orth":
         return [(c["n_L_fixed"], nH, rho) for nH in c["orth_n_H_grid"] for rho in c["orth_grid"]]
+    if row == "record":
+        return [(c["n_L_fixed"], nH, sd) for nH in c["record_n_H_grid"] for sd in c["record_sd_grid"]]
     if row == "nH":
         return [(c["n_L_fixed"], nH, 0.0) for nH in c["n_H_grid"]]
     return [(nL, c["n_H_fixed"], 0.0) for nL in c["n_L_grid"]]
@@ -123,13 +131,15 @@ def best_in_span(M, s0):
 
 
 def simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed):
-    """The truth and the sampled comparisons of one cell (for row "orth" the third slot is rho_orth)."""
+    """The truth and the sampled comparisons of one cell (for row "orth" the third slot is rho_orth,
+    for row "record" it is record_sd)."""
     c = CONFIGS[cfg_name]
     N, K, r = c["N"], c["K"], c["r"]
     rho = c.get("swap_fraction", 0.5)
     sigma_L = c.get("sigma_L", {}).get(row, 0.0)
     rho_orth = float(sigma_pos) if row == "orth" else 0.0
-    sigma_pos = 0.0 if row == "orth" else sigma_pos
+    record_sd = float(sigma_pos) if row == "record" else 0.0
+    sigma_pos = 0.0 if row in ("orth", "record") else sigma_pos
     base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_H=n_H, sigma_pos=float(sigma_pos), seed=seed,
                 swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
     mu, gamma, U, V = generate_study_parameters(N, K, r, random_seed=seed)
@@ -151,9 +161,9 @@ def simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed):
                     nH_delta_mu=float(n_H * d_mu), nH_delta_W=float(n_H * d_W), crossover_mu=(N - 2) / 2.0, crossover_W=(N - 2 - r) / 2.0)
     matched = None
     if c.get("matched"):
-        matched = generate_matched_comparisons(S, b, s0, n_H, n_L, random_seed=seed + 3, swap_fraction=rho)
+        matched = generate_matched_comparisons(S, b, s0, n_H, n_L, random_seed=seed + 3, swap_fraction=rho, record_sd=record_sd)
         llm, hum = matched["llm"], matched["human"]
-        base.update(n_U=int(n_L), n_verdicts=len(llm), matched=True)
+        base.update(n_U=int(n_L), n_verdicts=len(llm), matched=True, record_sd=record_sd)
     else:
         llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3, swap_fraction=rho, overdispersion=sigma_L, position_heterogeneity=sigma_pos)
         hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
@@ -384,7 +394,7 @@ def existing_keys(path):
             for line in f:
                 d = json.loads(line)
                 row = "nH" if d["row"] == "n0" else d["row"]              # pre-rename rows.jsonl stored row "n0" and key "n_0"
-                slot = d.get("rho_orth", 0.0) if row == "orth" else d.get("sigma_pos", 0.0)
+                slot = d.get("rho_orth", 0.0) if row == "orth" else d.get("record_sd", 0.0) if row == "record" else d.get("sigma_pos", 0.0)
                 keys.add((row, d["n_L"], d.get("n_H", d.get("n_0")), float(slot), d["seed"]))
     return keys
 
@@ -392,7 +402,7 @@ def existing_keys(path):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="main10", choices=sorted(CONFIGS))
-    p.add_argument("--row", default="both", choices=["nH", "nL", "pos", "orth", "both"])
+    p.add_argument("--row", default="both", choices=["nH", "nL", "pos", "orth", "record", "both"])
     p.add_argument("--seeds", default="0:10", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)

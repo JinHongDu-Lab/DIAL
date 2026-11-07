@@ -299,7 +299,7 @@ def generate_human_comparisons(s_H, total_comparisons, random_seed=42, pair_subs
     return [(0, int(i_), int(j_), int(y_)) for i_, j_, y_ in zip(i, j, draws)]
 
 
-def generate_matched_comparisons(S, b, s_H, n_labeled, n_unlabeled, random_seed=42, swap_fraction=0.5):
+def generate_matched_comparisons(S, b, s_H, n_labeled, n_unlabeled, random_seed=42, swap_fraction=0.5, record_sd=0.0):
     """Matched-pair design (matched design, ICLR 2027 experiment 1b): every record is one item pair answered by
     every judge once, with its own display order drawn as in `generate_random_llm_comparisons`;
     the first `n_labeled` records also carry a human outcome from `s_H`, the remaining
@@ -309,6 +309,11 @@ def generate_matched_comparisons(S, b, s_H, n_labeled, n_unlabeled, random_seed=
     labeled ones, and the per-record judge verdict matrices ``f_labeled`` (n_labeled, K) and
     ``f_unlabeled`` (n_unlabeled, K) with the pairs ``pairs_labeled`` / ``pairs_unlabeled``
     (rows (i, j)), from which a PPI proxy (one judge, or the panel majority) is formed.
+
+    `record_sd` > 0 adds a record-level effect delta_t ~ N(0, record_sd^2) to the logit of every
+    judge's verdict and of the human label on record t (a shared difficulty or wording effect), so
+    the K + 1 comparisons of a record are dependent in a way the judge-pair cell kernel does not
+    see; it is returned as ``record_effects``.
     """
     S = np.asarray(S, dtype=float)
     b = np.asarray(b, dtype=float)
@@ -320,11 +325,12 @@ def generate_matched_comparisons(S, b, s_H, n_labeled, n_unlabeled, random_seed=
     pair = rng.integers(tri_i.size, size=n_rec)
     i, j = tri_i[pair], tri_j[pair]
     a = np.where(rng.uniform(size=(n_rec, K)) < swap_fraction, -1, 1)
-    eta = S[:, i].T - S[:, j].T + a * b[None, :]
+    delta = rng.normal(scale=record_sd, size=n_rec) if record_sd > 0 else np.zeros(n_rec)
+    eta = S[:, i].T - S[:, j].T + a * b[None, :] + delta[:, None]
     f = rng.binomial(1, _logistic(eta)).astype(float)          # (n_rec, K)
-    y = rng.binomial(1, _logistic(s_H[i] - s_H[j])).astype(float)
+    y = rng.binomial(1, _logistic(s_H[i] - s_H[j] + delta)).astype(float)
     llm = [(int(k), int(i[t]), int(j[t]), int(f[t, k]), int(a[t, k])) for t in range(n_rec) for k in range(K)]
     human = [(0, int(i[t]), int(j[t]), int(y[t])) for t in range(n_labeled)]
     return dict(llm=llm, human=human,
                 pairs_labeled=np.column_stack([i[:n_labeled], j[:n_labeled]]), pairs_unlabeled=np.column_stack([i[n_labeled:], j[n_labeled:]]),
-                y_labeled=y[:n_labeled], f_labeled=f[:n_labeled], f_unlabeled=f[n_labeled:])
+                y_labeled=y[:n_labeled], f_labeled=f[:n_labeled], f_unlabeled=f[n_labeled:], record_effects=delta)
