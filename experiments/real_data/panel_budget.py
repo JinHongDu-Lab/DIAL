@@ -143,6 +143,14 @@ def alternative_rows(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, methods=AL
     return _alternative_agg(raw, 'level').assign(dataset=ds, panel=panel)
 
 
+def llm_only_tau(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL):
+    """Kendall's tau of the LLM-only consensus ranking (zero human budget, `budget_full` level 0)."""
+    raw = load(ds, ROOT, results='alternatives/budget')
+    raw = raw[(raw.panel == panel) & (raw.method == 'llm_only') & (raw.level == 0) & (raw.seed < SEEDS) & (~raw.failed)]
+    assert len(raw) == SEEDS
+    return float(raw.ref_kendall.mean())
+
+
 def alternative_intermediate_rows(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, methods=ALTERNATIVE):
     """The same estimators on the intermediate-LLM-budget run (its own `--tag alternatives` pass)."""
     path = ALTERNATIVE_ROOT / 'intermediate_budget' / 'jobs_alternatives.jsonl'
