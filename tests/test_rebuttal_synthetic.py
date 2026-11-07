@@ -31,3 +31,15 @@ def test_addon_runner_marks_unmatched_and_runs_matched():
     assert by["ppi_bt_best"]["n_labeled_matched"] == 200 and by["ppi_bt_best"]["n_proxy_only"] == 500
     cell = simulate_cell("main10_matched", "nH", 500, 200, 0.0, 0)
     assert cell["base"]["matched"] and cell["base"]["n_verdicts"] == 4 * 700
+
+
+def test_orth_row_scales_misalignment_with_rho():
+    from experiments.simulation.synthetic import cells_for
+    cells = cells_for("main10_orth", "orth")
+    assert len(cells) == 14 and cells[0][2] == 0.0
+    c0 = simulate_cell("main10_orth", "orth", 20000, 800, 0.0, 0)
+    c1 = simulate_cell("main10_orth", "orth", 20000, 800, 0.5, 0)
+    assert c0["base"]["delta_mu"] < 1e-8 and c1["base"]["delta_mu"] > 0 and c1["base"]["delta_W"] > 0
+    assert c1["base"]["delta_W"] <= c1["base"]["delta_mu"] + 1e-9
+    assert abs(c1["base"]["orth_norm"] - 0.5 * np.sqrt(10)) < 1e-6
+    assert c1["base"]["sigma_pos"] == 0.0 and c1["base"]["rho_orth"] == 0.5

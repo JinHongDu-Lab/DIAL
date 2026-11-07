@@ -83,6 +83,13 @@ CONFIGS = {
     # records (n_U proxy-only records are added), so the judge verdicts number K (n_H + n_U).
     "main10_matched": dict(N=10, K=4, r=1, n_L_fixed=5000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0, matched=True,
                            sigma_L=dict(nH=0.0), n_H_grid=[100, 200, 400, 800, 1600], n_L_grid=[5000]),
+    # rebuttal (ICLR 2027, R3-Q1): human target with a component orthogonal to the whole LLM space,
+    # s_0 = mu + rho ||mu|| u / ||u|| with u orthogonal to {1, mu, V}; the `orth` row varies rho at each
+    # n_H of `orth_n_H_grid`, so the approximation errors Delta_mu, Delta_W of Theorem 3 grow with rho
+    # while the LLM side stays exactly specified. The row's third cell slot carries rho.
+    "main10_orth": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0,
+                        sigma_L=dict(orth=0.0), orth_grid=[0.0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0], orth_n_H_grid=[200, 800],
+                        n_H_grid=[800], n_L_grid=[20000]),
 }
 # add-on methods of the rebuttal (run by `--addon`, written to a separate file): PPI++ with the best
 # single judge or the panel majority as proxy (defined only on a matched design), ridge toward the
@@ -96,6 +103,8 @@ def cells_for(cfg, row):
     c = CONFIGS[cfg]
     if row == "pos":
         return [(c["n_L_fixed"], c["n_H_fixed"], sp) for sp in c["sigma_pos_grid"]]
+    if row == "orth":
+        return [(c["n_L_fixed"], nH, rho) for nH in c["orth_n_H_grid"] for rho in c["orth_grid"]]
     if row == "nH":
         return [(c["n_L_fixed"], nH, 0.0) for nH in c["n_H_grid"]]
     return [(nL, c["n_H_fixed"], 0.0) for nL in c["n_L_grid"]]
@@ -105,12 +114,22 @@ def _cover(truth, ci):
     return float(np.mean((truth >= ci["lower"]) & (truth <= ci["upper"])))
 
 
+def best_in_span(M, s0):
+    """Population-risk-minimizing element of col(M) and its excess risk Delta_M (Theorem 3)."""
+    from scipy.optimize import minimize as _min
+    M = np.asarray(M, dtype=float).reshape(s0.size, -1)
+    res = _min(lambda c: population_excess_risk(M @ c, s0), x0=np.zeros(M.shape[1]), method="BFGS")
+    return M @ res.x, float(res.fun)
+
+
 def simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed):
-    """The truth and the sampled comparisons of one cell."""
+    """The truth and the sampled comparisons of one cell (for row "orth" the third slot is rho_orth)."""
     c = CONFIGS[cfg_name]
     N, K, r = c["N"], c["K"], c["r"]
     rho = c.get("swap_fraction", 0.5)
     sigma_L = c.get("sigma_L", {}).get(row, 0.0)
+    rho_orth = float(sigma_pos) if row == "orth" else 0.0
+    sigma_pos = 0.0 if row == "orth" else sigma_pos
     base = dict(config=cfg_name, row=row, N=N, K=K, r=r, n_L=n_L, n_H=n_H, sigma_pos=float(sigma_pos), seed=seed,
                 swap_fraction=rho, sigma_L=sigma_L, c_v_sd=c.get("c_v_sd", 0.0))
     mu, gamma, U, V = generate_study_parameters(N, K, r, random_seed=seed)
@@ -118,6 +137,18 @@ def simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed):
     c_mu, c_v = generate_study_calibration(V, c_v_sd=c.get("c_v_sd", 0.0), random_seed=seed + 2)
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
+    if row == "orth":
+        rng_o = np.random.default_rng(seed + 5)
+        basis = np.column_stack([np.ones(N), mu, V])
+        u = rng_o.normal(size=N)
+        u = u - basis @ np.linalg.lstsq(basis, u, rcond=None)[0]
+        delta = rho_orth * np.linalg.norm(mu) * u / np.linalg.norm(u)
+        s0 = s0 + delta
+        _, d_mu = best_in_span(mu, s0)
+        _, d_W = best_in_span(np.column_stack([mu, V]), s0)
+        # Theorem 3: anchoring in M beats the unrestricted fit to first order iff n_H Delta_M < (N - 1 - d) / 2
+        base.update(rho_orth=rho_orth, orth_norm=float(np.linalg.norm(delta)), delta_mu=d_mu, delta_W=d_W,
+                    nH_delta_mu=float(n_H * d_mu), nH_delta_W=float(n_H * d_W), crossover_mu=(N - 2) / 2.0, crossover_W=(N - 2 - r) / 2.0)
     matched = None
     if c.get("matched"):
         matched = generate_matched_comparisons(S, b, s0, n_H, n_L, random_seed=seed + 3, swap_fraction=rho)
@@ -353,14 +384,15 @@ def existing_keys(path):
             for line in f:
                 d = json.loads(line)
                 row = "nH" if d["row"] == "n0" else d["row"]              # pre-rename rows.jsonl stored row "n0" and key "n_0"
-                keys.add((row, d["n_L"], d.get("n_H", d.get("n_0")), float(d.get("sigma_pos", 0.0)), d["seed"]))
+                slot = d.get("rho_orth", 0.0) if row == "orth" else d.get("sigma_pos", 0.0)
+                keys.add((row, d["n_L"], d.get("n_H", d.get("n_0")), float(slot), d["seed"]))
     return keys
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="main10", choices=sorted(CONFIGS))
-    p.add_argument("--row", default="both", choices=["nH", "nL", "pos", "both"])
+    p.add_argument("--row", default="both", choices=["nH", "nL", "pos", "orth", "both"])
     p.add_argument("--seeds", default="0:10", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)

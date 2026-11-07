@@ -56,3 +56,16 @@ python run_real_data.py robustness --sweep budget_full --panels all --seeds 0:50
 
 `budget_full` adds n_H = 0 (only `llm_only` is defined) and n_H = 3200 on Arena with the full
 stored method panel plus the add-ons via `--methods`.
+
+## Group 3: orthogonal misalignment (R3-Q1)
+
+```bash
+python run_simulation.py --config main10_orth --row orth --seeds 0:50 --workers 6
+python run_simulation.py --config main10_orth --row orth --seeds 0:50 --workers 6 --addon
+```
+
+`main10_orth` sets s_H = mu + rho ||mu|| u / ||u|| with u orthogonal to {1, mu, V}; the `orth`
+row varies rho in {0, 0.1, 0.2, 0.3, 0.5, 0.75, 1} at n_H in {200, 800} (the row's third cell slot
+carries rho, stored as `rho_orth`). Each row records `delta_mu`, `delta_W` (Theorem 3's
+population approximation errors), `nH_delta_mu`, `nH_delta_W`, and the crossover values
+`crossover_mu` = (N - 2)/2 and `crossover_W` = (N - 2 - r)/2.
