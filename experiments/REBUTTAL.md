@@ -1,0 +1,58 @@
+# ICLR 2027 rebuttal runs
+
+Rules: stored results under `results/real_robustness`, `results/intermediate_budget`, and
+`results/simulation` are never rewritten; every rebuttal row goes to `results/rebuttal/`. PPI++ is
+run as defined (no penalty, box, or imputation); where the stored unmatched designs give it no
+matched verdicts the row records the failure. The matched-pair sweep exists for the comparison on
+PPI++'s own terms. Plan and status: `../../plan/2026-11-07-iclr-rebuttal-plan.md`.
+
+## Methods (`experiments/real_data/rebuttal_methods.py`, `experiments/style.py` `REBUTTAL`)
+
+| Key | Name | Definition |
+|---|---|---|
+| `ppi_bt_best` | PPI++ (best judge) | Bradley--Terry PPI++; proxy = the judge agreeing most with the cell's calibration labels |
+| `ppi_bt_panel` | PPI++ (panel) | the same with the panel majority verdict as proxy |
+| `ridge_mu` | Ridge-to-LLM | human BTL + kappa ||P s||^2 shrinking toward span(mu_hat), kappa by approximate leave-one-out |
+| `human_box` | Human (box) | unpenalized human BTL on DIAL's coordinate box, box activity recorded |
+| `human_ridge` | Human (ridge) | ridge toward zero, kappa by approximate leave-one-out |
+| `human_firth` | Human (Firth) | Firth-penalized human BTL |
+| `atc_ridge`, `atc_firth` | AtC (ridge / Firth) | AtC with the stage-1 ordering from the penalized fit |
+| `llm_only` | LLM-only consensus | mu_hat alone (zero human budget; ranking metrics only) |
+
+Row fields added by PPI++: `ppi_status` (ok / partial / failed), `n_labeled_matched`,
+`n_proxy_only`, `lam`, `ppi_lam_raw`, `proxy_judge`, `proxy_agreement`.
+
+## Experiment 1a: add-ons on the stored designs (unmatched verdicts)
+
+```bash
+python run_real_data.py robustness --sweep budget --panels all \
+    --methods ppi_bt_best,ppi_bt_panel,ridge_mu,human_box,human_ridge,human_firth,atc_ridge,atc_firth \
+    --seeds 0:50 --workers 8 --out results/rebuttal/budget
+python run_real_data.py intermediate --seeds 50 --workers 8 --tag rebuttal --out results/rebuttal/intermediate_budget \
+    --methods ppi_bt_best,ppi_bt_panel,ridge_mu,human_box,human_ridge,human_firth,atc_ridge,atc_firth
+python run_simulation.py --config main10 --row nH --seeds 0:50 --workers 6 --addon      # PPI++ rows record unmatched_design
+```
+
+## Experiment 1b: matched-pair design
+
+```bash
+python run_real_data.py robustness --sweep matched --seeds 0:50 --workers 8 --out results/rebuttal/matched \
+    --methods human_only,consensus_cal,dial_mu,atc_btl,ppi_bt_best,ppi_bt_panel,ridge_mu,human_firth
+python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6           # the stored method panel
+python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6 --addon   # PPI++, ridge_mu, human_firth
+```
+
+Design (`configs/real_robustness.toml` `[sweeps.matched]`): n_H labeled train records with their
+human label and every kept judge's verdicts in both orders, plus n_U proxy-only train records
+(-1 = all remaining); the job's `level` is n_H and its `n_H_level` slot carries n_U. Synthetic
+`main10_matched`: every record answered once by each of the K judges, n_U = 5000 proxy-only
+records, human target s_H = mu.
+
+## Group 2: human-budget extension
+
+```bash
+python run_real_data.py robustness --sweep budget_full --panels all --seeds 0:50 --workers 8 --out results/rebuttal/budget
+```
+
+`budget_full` adds n_H = 0 (only `llm_only` is defined) and n_H = 3200 on Arena with the full
+stored method panel plus the add-ons via `--methods`.

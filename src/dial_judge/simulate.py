@@ -297,3 +297,34 @@ def generate_human_comparisons(s_H, total_comparisons, random_seed=42, pair_subs
     i, j = pair_arr[rep, 0], pair_arr[rep, 1]
     draws = rng.binomial(1, _logistic(s_H[i] - s_H[j]))
     return [(0, int(i_), int(j_), int(y_)) for i_, j_, y_ in zip(i, j, draws)]
+
+
+def generate_matched_comparisons(S, b, s_H, n_labeled, n_unlabeled, random_seed=42, swap_fraction=0.5):
+    """Matched-pair design (rebuttal experiment 1b): every record is one item pair answered by
+    every judge once, with its own display order drawn as in `generate_random_llm_comparisons`;
+    the first `n_labeled` records also carry a human outcome from `s_H`, the remaining
+    `n_unlabeled` are proxy-only.
+
+    Returns ``llm`` records (k, i, j, y, a) for all records, ``human`` records (0, i, j, y) for the
+    labeled ones, and the per-record judge verdict matrices ``f_labeled`` (n_labeled, K) and
+    ``f_unlabeled`` (n_unlabeled, K) with the pairs ``pairs_labeled`` / ``pairs_unlabeled``
+    (rows (i, j)), from which a PPI proxy (one judge, or the panel majority) is formed.
+    """
+    S = np.asarray(S, dtype=float)
+    b = np.asarray(b, dtype=float)
+    s_H = np.asarray(s_H, dtype=float)
+    K, N = S.shape
+    rng = np.random.default_rng(random_seed)
+    tri_i, tri_j = np.triu_indices(N, k=1)
+    n_rec = int(n_labeled + n_unlabeled)
+    pair = rng.integers(tri_i.size, size=n_rec)
+    i, j = tri_i[pair], tri_j[pair]
+    a = np.where(rng.uniform(size=(n_rec, K)) < swap_fraction, -1, 1)
+    eta = S[:, i].T - S[:, j].T + a * b[None, :]
+    f = rng.binomial(1, _logistic(eta)).astype(float)          # (n_rec, K)
+    y = rng.binomial(1, _logistic(s_H[i] - s_H[j])).astype(float)
+    llm = [(int(k), int(i[t]), int(j[t]), int(f[t, k]), int(a[t, k])) for t in range(n_rec) for k in range(K)]
+    human = [(0, int(i[t]), int(j[t]), int(y[t])) for t in range(n_labeled)]
+    return dict(llm=llm, human=human,
+                pairs_labeled=np.column_stack([i[:n_labeled], j[:n_labeled]]), pairs_unlabeled=np.column_stack([i[n_labeled:], j[n_labeled:]]),
+                y_labeled=y[:n_labeled], f_labeled=f[:n_labeled], f_unlabeled=f[n_labeled:])

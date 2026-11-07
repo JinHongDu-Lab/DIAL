@@ -88,3 +88,24 @@ settings = ["english_global", "nonenglish_global", "nonenglish_subset"]
 # n_H must let the unrestricted BTL on 20 items exist; levels above the subset's train pool collapse to "all".
 levels = [100, 200, 400, 800, 1600]
 f_test = 0.3
+
+# ---------------------------------------------------------------------------- rebuttal sweeps
+# Kept apart from the stored sweeps above so that previous results are untouched.
+# Human-budget extension (ICLR rebuttal, group 2): zero budget (LLM-only consensus only) and the
+# high end where AtC and Human may overtake; same as-collected balanced LLM data as `budget`.
+[sweeps.budget_full]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
+panels = ["all"]
+rho_swap = 1.0
+[sweeps.budget_full.levels]
+arena_33k = [0, 3200]
+mt_bench = [0]
+pandalm = [0]
+
+# Matched-pair design (ICLR rebuttal, group 1): n_H labeled train records with their human label and
+# all judge verdicts in both orders, plus n_U proxy-only train records (-1 = all remaining).
+[sweeps.matched]
+datasets = ["arena_33k", "mt_bench", "pandalm"]
+panels = ["all", "biased5"]
+n_H_levels = { arena_33k = [50, 100, 200, 400, 800, 1600, 3200], mt_bench = [20, 40, 80, 160, 320], pandalm = [20, 40, 80, 160, 320] }
+n_U_levels = { arena_33k = [1000, -1], mt_bench = [-1], pandalm = [-1] }

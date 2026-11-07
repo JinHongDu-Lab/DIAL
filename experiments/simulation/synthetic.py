@@ -52,6 +52,7 @@ from dial_judge.inference import (
     population_excess_risk,
 )
 from dial_judge.simulate import (
+    generate_matched_comparisons,
     compute_human_score,
     compute_score_matrix,
     generate_study_calibration,
@@ -77,7 +78,16 @@ CONFIGS = {
     "main10_pos": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0,
                        sigma_L=dict(pos=0.0), sigma_pos_grid=[0.0, 0.25, 0.5, 0.75, 1.0],
                        n_H_grid=[800], n_L_grid=[20000]),
+    # rebuttal (ICLR 2027, experiment 1b): matched-pair design for the PPI++ comparison. Every record is
+    # answered by all K judges; the labeled records also carry a human outcome. n_L here counts
+    # records (n_U proxy-only records are added), so the judge verdicts number K (n_H + n_U).
+    "main10_matched": dict(N=10, K=4, r=1, n_L_fixed=5000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0, matched=True,
+                           sigma_L=dict(nH=0.0), n_H_grid=[100, 200, 400, 800, 1600], n_L_grid=[5000]),
 }
+# add-on methods of the rebuttal (run by `--addon`, written to a separate file): PPI++ with the best
+# single judge or the panel majority as proxy (defined only on a matched design), ridge toward the
+# LLM consensus, and the Firth-penalized human fit
+ADDON_METHODS = ["ppi_bt_best", "ppi_bt_panel", "ridge_mu", "human_firth"]
 METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_mu", "oracle_w"]
 
 
@@ -108,12 +118,18 @@ def simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed):
     c_mu, c_v = generate_study_calibration(V, c_v_sd=c.get("c_v_sd", 0.0), random_seed=seed + 2)
     S = compute_score_matrix(mu, gamma, U, V)
     s0 = compute_human_score(mu, V, c_mu, c_v)
-    llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3, swap_fraction=rho, overdispersion=sigma_L, position_heterogeneity=sigma_pos)
-    hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
+    matched = None
+    if c.get("matched"):
+        matched = generate_matched_comparisons(S, b, s0, n_H, n_L, random_seed=seed + 3, swap_fraction=rho)
+        llm, hum = matched["llm"], matched["human"]
+        base.update(n_U=int(n_L), n_verdicts=len(llm), matched=True)
+    else:
+        llm = generate_random_llm_comparisons(S, b, n_L, random_seed=seed + 3, swap_fraction=rho, overdispersion=sigma_L, position_heterogeneity=sigma_pos)
+        hum = generate_random_human_comparisons(s0, n_H, random_seed=seed + 4)
     n_ijk, y_ijk = comparisons_to_aggregated(llm, N, K)
     n_order, y_order = comparisons_to_order_aggregated(llm, N, K)
     pairs = pool_pairs(hum)
-    return dict(N=N, K=K, r=r, base=base, b=b, S=S, s0=s0, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, pairs=pairs)
+    return dict(N=N, K=K, r=r, base=base, b=b, S=S, s0=s0, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, pairs=pairs, matched=matched)
 
 
 def run_cell(args):
@@ -261,6 +277,75 @@ def run_cell(args):
     return out
 
 
+def run_addon_cell(args):
+    """Rebuttal add-on methods only (ADDON_METHODS), on the same cell as `run_cell` would draw.
+
+    PPI++ needs a proxy verdict on each human-labeled record; the stored configurations draw the
+    human and LLM comparisons separately, so there PPI++ is recorded as failed with reason
+    ``unmatched_design``; it runs on the ``*_matched`` configurations. Nothing in the stored
+    rows is recomputed.
+    """
+    from dial_judge.hja import fit_centered_btl_firth
+    from dial_judge.penalized import fit_ridge_btl
+    from dial_judge.ppi import fit_bt_ppi
+
+    cfg_name, row, n_L, n_H, sigma_pos, seed = args
+    t0 = time.perf_counter()
+    out = []
+    cell = simulate_cell(cfg_name, row, n_L, n_H, sigma_pos, seed)
+    N, K, r, base, s0, pairs, matched = (cell[k] for k in ("N", "K", "r", "base", "s0", "pairs", "matched"))
+    n_ijk, y_ijk, n_order, y_order = (cell[k] for k in ("n_ijk", "y_ijk", "n_order", "y_order"))
+
+    def rec(method, s_hat, **extra):
+        s_hat = np.asarray(s_hat, dtype=float)
+        acc = sign_accuracy(s0, s_hat)
+        m = dict(base, method=method, excess=population_excess_risk(s_hat, s0), mse=float(np.mean((s_hat - s0) ** 2)), sign_acc=acc,
+                 kendall=2.0 * acc - 1.0, spearman=spearman(s0, s_hat), max_abs=float(np.max(np.abs(s_hat))))
+        m.update(extra)
+        out.append(m)
+
+    def fail(method, e):
+        out.append(dict(base, method=method, error=repr(e) + traceback.format_exc()[-200:]))
+
+    for method, proxy in (("ppi_bt_best", "best"), ("ppi_bt_panel", "panel")):
+        if matched is None:
+            out.append(dict(base, method=method, error="unmatched_design", ppi_status="failed"))
+            continue
+        try:
+            fl, fu, yl = matched["f_labeled"], matched["f_unlabeled"], matched["y_labeled"]
+            if proxy == "best":
+                agree = (1.0 - np.abs(fl - yl[:, None])).mean(0)
+                k = int(np.argmax(agree))
+                pl, pu, extra = fl[:, k], fu[:, k], dict(proxy_judge=k, proxy_agreement=float(agree[k]))
+            else:
+                vote = lambda f: np.where(f.mean(1) > 0.5, 1.0, np.where(f.mean(1) < 0.5, 0.0, 0.5))
+                pl, pu, extra = vote(fl), vote(fu), {}
+            labeled = np.column_stack([matched["pairs_labeled"], yl, pl])
+            unlabeled = np.column_stack([matched["pairs_unlabeled"], pu])
+            fit = fit_bt_ppi(N, labeled, unlabeled)
+            fi = fit["fit_info"]
+            if not fi["finite"]:
+                fail(method, RuntimeError(f"non-finite PPI++ fit (max |s| = {fi['max_abs']:.1f})"))
+                continue
+            rec(method, fit["s_H"], lam=fit["lam"], ppi_lam_raw=fi.get("lam_raw", np.nan), ppi_status="ok", n_labeled_matched=fi["n_labeled"], n_proxy_only=fi["n_unlabeled"], **extra)
+        except Exception as e:  # noqa: BLE001
+            fail(method, e)
+    try:
+        st = calibrate_llm_fit(fit_hja(N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order), pairs, consensus_only=True)
+        fit = fit_ridge_btl(N, pairs, mu=np.asarray(st["mu"], dtype=float))
+        rec("ridge_mu", fit["s_H"], kappa=fit["kappa"], kappa_rel=fit["kappa_rel"], selected_regular=fit["fit_info"]["selected_regular"])
+    except Exception as e:  # noqa: BLE001
+        fail("ridge_mu", e)
+    try:
+        rec("human_firth", fit_centered_btl_firth(N, pairs))
+    except Exception as e:  # noqa: BLE001
+        fail("human_firth", e)
+    secs = time.perf_counter() - t0
+    for m in out:
+        m["seconds_cell"] = secs
+    return out
+
+
 def existing_keys(path):
     keys = set()
     if path.exists():
@@ -279,9 +364,11 @@ def main():
     p.add_argument("--seeds", default="0:10", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)
+    p.add_argument("--addon", action="store_true", help="run only the rebuttal add-on methods (ADDON_METHODS) into results/rebuttal/simulation/<config>/rows.jsonl")
     a = p.parse_args()
     s0, s1 = (int(x) for x in a.seeds.split(":"))
-    out = Path(a.out or f"results/simulation/{a.config}/rows.jsonl")
+    default_out = f"results/rebuttal/simulation/{a.config}/rows.jsonl" if a.addon else f"results/simulation/{a.config}/rows.jsonl"
+    out = Path(a.out or default_out)
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)
     rows = ["nH", "nL"] if a.row == "both" else [a.row]
@@ -290,7 +377,7 @@ def main():
     print(f"{len(jobs)} cells to run ({len(done)} already stored) -> {out}", flush=True)
     t0 = time.perf_counter()
     with ProcessPoolExecutor(max_workers=a.workers) as ex, open(out, "a") as f:
-        for k, recs in enumerate(ex.map(run_cell, jobs, chunksize=1)):
+        for k, recs in enumerate(ex.map(run_addon_cell if a.addon else run_cell, jobs, chunksize=1)):
             for m in recs:
                 f.write(json.dumps(m) + "\n")
             f.flush()

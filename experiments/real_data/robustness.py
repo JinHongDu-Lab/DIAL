@@ -71,9 +71,11 @@ def _display_path(path: Path) -> Path:
     except ValueError:
         return path
 
-SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest")
+SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest", "budget_full", "matched")
 NOISE_KINDS = ("random", "position", "anti")
 METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "atc_btl", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
+# rebuttal add-ons (experiments/real_data/rebuttal_methods.py): PPI++, ridge-to-consensus, regularized human baselines
+from .rebuttal_methods import REBUTTAL_METHODS, run_rebuttal_methods  # noqa: E402
 DATASET_CODE = {"arena_33k": 1, "mt_bench": 2, "pandalm": 3}
 
 
@@ -339,7 +341,7 @@ def build_cell(job):
         m = int(level)
         if sweep == "noise_scarce":
             n_H = int(per_dataset(swcfg.get("n_H_fixed", n_H), dataset))
-    elif sweep == "budget":
+    elif sweep in ("budget", "budget_full"):
         n_H = int(level)
     elif sweep == "llm_budget":
         n_L_req = int(level)
@@ -365,16 +367,56 @@ def build_cell(job):
     test_recs = human_records(hum_test)
     n_L, n_H_actual = int(len(llm)), int(len(cal))
     mults = scfg.get("lambda_multipliers")
-    lam_grid = [float(mm) * n_L / n_H_actual for mm in mults] if mults else None
+    lam_grid = [float(mm) * n_L / max(n_H_actual, 1) for mm in mults] if mults else None
     r_max = int(min(scfg.get("rank_select_max", 2), K - 1, N - 2))
     return dict(scfg=scfg, N=N, K=K, K_real=K_real, K_dropped=K_dropped, A=A, pairs=pairs, test_recs=test_recs, hum_test=hum_test, hum_train=hum_train,
                 llm=llm, cal=cal, n_L=n_L, n_H_actual=n_H_actual, lam_grid=lam_grid, r_max=r_max, rho=rho, m=m)
 
 
+def build_matched_cell(job):
+    """Matched-pair design (rebuttal experiment 1b): n_H labeled train records carrying their
+    human label and every kept judge's verdicts in both display orders, plus n_U proxy-only train
+    records with judge verdicts alone. DIAL sees the judge verdicts of all n_H + n_U records; PPI++
+    sees the proxy on the same records, so both methods use the same LLM judgments. The job's
+    ``level`` is n_H and its ``n_H_req`` slot carries n_U (-1 = every remaining train record).
+    Test pools coincide with those of the other sweeps (same split seed)."""
+    dataset, sweep, panel_name, kind, n_H, n_U, seed, cfg = job
+    scfg, dcfg = cfg["study"], cfg[dataset]
+    panel = restrict_panel(get_panel(dataset, cfg), None if panel_name == "all" else cfg["panels"][panel_name])
+    code = DATASET_CODE[dataset]
+    rng_split = np.random.default_rng([int(seed), code, 1])
+    rng_budget = np.random.default_rng([int(seed), code, 2])
+    rng_design = np.random.default_rng([int(seed), code, 3])
+    test, train = split_records(panel["records"], dcfg["f_test"], rng_split)
+    hum_train = panel["human"][panel["human"]["record"].isin(train)].reset_index(drop=True)
+    hum_test = panel["human"][panel["human"]["record"].isin(test) & (panel["human"]["y"] != 0.5)].reset_index(drop=True)
+    llm_train = panel["llm"][panel["llm"]["record"].isin(train)].reset_index(drop=True)
+    cal = draw_budget(hum_train, int(n_H), rng_budget)
+    labeled = set(cal["record"].tolist())
+    remaining = np.array(sorted(set(llm_train["record"].unique()) - labeled))
+    if n_U is not None and 0 <= int(n_U) < len(remaining):
+        remaining = np.sort(rng_design.choice(remaining, size=int(n_U), replace=False))
+    keep = labeled | set(remaining.tolist())
+    llm = llm_train[llm_train["record"].isin(keep)].reset_index(drop=True)
+    K_real = panel["K"]
+    llm, K, K_real, K_dropped = drop_empty_judges(llm, K_real, K_real)
+    N = panel["N"]
+    A = llm_arrays(llm, N, K)
+    pairs = human_pairs(cal)
+    test_recs = human_records(hum_test)
+    n_L, n_H_actual = int(len(llm)), int(len(cal))
+    mults = scfg.get("lambda_multipliers")
+    lam_grid = [float(mm) * n_L / max(n_H_actual, 1) for mm in mults] if mults else None
+    r_max = int(min(scfg.get("rank_select_max", 2), K - 1, N - 2))
+    return dict(scfg=scfg, N=N, K=K, K_real=K_real, K_dropped=K_dropped, A=A, pairs=pairs, test_recs=test_recs, hum_test=hum_test, hum_train=hum_train,
+                llm=llm, cal=cal, n_L=n_L, n_H_actual=n_H_actual, lam_grid=lam_grid, r_max=r_max, rho=1.0, m=0,
+                n_U=int(len(remaining)), n_records_llm=int(llm["record"].nunique()))
+
+
 def run_cell(job):
     dataset, sweep, panel_name, kind, level, n_H_req, seed, cfg = job
     t0 = time.perf_counter()
-    cell = build_cell(job)
+    cell = build_matched_cell(job) if sweep == "matched" else build_cell(job)
     scfg, N, K, K_real, K_dropped, A, pairs, test_recs = (cell[k] for k in ("scfg", "N", "K", "K_real", "K_dropped", "A", "pairs", "test_recs"))
     hum_test, hum_train, llm, cal, n_L, n_H_actual = (cell[k] for k in ("hum_test", "hum_train", "llm", "cal", "n_L", "n_H_actual"))
     lam_grid, r_max, rho, m = (cell[k] for k in ("lam_grid", "r_max", "rho", "m"))
@@ -384,7 +426,9 @@ def run_cell(job):
     r_llm = int(min(scfg.get("llm_rank", 1), K - 1, N - 2))          # structural rank of the LLM side
     base = dict(dataset=dataset, sweep=sweep, panel=panel_name, kind=kind, level=float(level), n_H=n_H_actual, n_H_level=int(n_H_req) if n_H_req is not None else -1, seed=int(seed),
                 N=N, K_real=K_real, K=K, K_dropped=K_dropped, r=r_llm, n_L=n_L, n_test=int(len(hum_test)), n_train_human=int(len(hum_train)), rho_swap=rho, m=int(m),
-                first_share=float(np.mean(llm["a"].to_numpy() == 1)), floor=floor, human_only_exists=bool(btl_mle_exists(N, pairs)))
+                first_share=float(np.mean(llm["a"].to_numpy() == 1)), floor=floor, human_only_exists=bool(btl_mle_exists(N, pairs)) if pairs else False)
+    if "n_U" in cell:
+        base.update(n_U=int(cell["n_U"]), n_records_llm=int(cell["n_records_llm"]))
     out = []
     only = cfg.get("_only_methods")
 
@@ -420,6 +464,19 @@ def run_cell(job):
         lam = float(lam)
         return dict(lam=lam, lam_rel=(lam * n_H_actual / n_L) if np.isfinite(lam) else float("inf"))
 
+    # ---- zero human budget (rebuttal `budget_full`): only the LLM-only consensus is defined.
+    # Its scale is not calibrated, so `excess` is not meaningful and only the ranking metrics are.
+    if n_H_actual == 0:
+        try:
+            fit = fit_hja(N, K, r_llm, n_ijk=A[0], y_ijk=A[1], n_order=A[2], y_order=A[3])
+            rec("llm_only", fit["mu"], **lam_fields(np.inf))
+            out[-1]["excess"] = float("nan")
+        except Exception as e:  # noqa: BLE001
+            fail("llm_only", e)
+        for row in out:
+            row["seconds_cell"] = time.perf_counter() - t0
+        return out
+
     # ---- baselines
     if want("human_only"):
         try:
@@ -445,7 +502,7 @@ def run_cell(job):
 
     # ---- Cons-Cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
     st_mu = None
-    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu", "atc_btl"):
+    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu", "atc_btl", *REBUTTAL_METHODS):
         try:
             st_mu = calibrate_llm_fit(llm_fit(), pairs, consensus_only=True)
             if want("consensus_cal"):
@@ -460,6 +517,9 @@ def run_cell(job):
             rec("atc_btl", fit_atc_btl(N, st_mu["mu"], pairs)["s_H"])
         except Exception as e:  # noqa: BLE001
             fail("atc_btl", e)
+    # ---- rebuttal add-ons: PPI++, ridge-to-consensus, regularized human baselines
+    if want(*REBUTTAL_METHODS):
+        run_rebuttal_methods(cell, want, rec, fail, st_mu)
     if st_mu is not None and want("dial_mu", "oracle_test"):
         try:
             sel = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_mu, lambda_grid=lam_grid, return_all=True, align="mu")
@@ -568,10 +628,14 @@ def jobs_for(sweep, cfg, seeds, smoke=False):
         return [(s, nH, seed, cfg) for s in sw["settings"] for nH in levels for seed in seeds]
     for d in sw["datasets"]:
         for p in sw["panels"]:
-            if sweep == "budget":
+            if sweep in ("budget", "budget_full"):
                 levels = sw["levels"][d]
                 levels = levels[:2] if smoke else levels
                 jobs += [(d, sweep, p, "none", lv, None, s, cfg) for lv in levels for s in seeds]
+            elif sweep == "matched":
+                levels = per_dataset(sw["n_H_levels"], d)
+                levels = levels[:2] if smoke else levels
+                jobs += [(d, sweep, p, "none", lv, nU, s, cfg) for lv in levels for nU in per_dataset(sw["n_U_levels"], d) for s in seeds]
             elif sweep == "llm_budget":
                 levels = per_dataset(sw["levels"], d)
                 levels = levels[:2] if smoke else levels

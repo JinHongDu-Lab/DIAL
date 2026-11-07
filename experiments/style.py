@@ -31,7 +31,18 @@ LABEL = {
     "dial_mle_w": "DIAL-Ada ($W$), fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "oracle": "oracle weight",
     "dial_rsel": "DIAL-Ada, rank by GACV",
+    # rebuttal add-ons (ICLR 2027): PPI-type and shrinkage comparisons, regularized human baselines
+    "ppi_bt_best": "PPI++ (best judge)",
+    "ppi_bt_panel": "PPI++ (panel)",
+    "ridge_mu": "Ridge-to-LLM",
+    "human_box": "Human (box)",
+    "human_ridge": "Human (ridge)",
+    "human_firth": "Human (Firth)",
+    "atc_ridge": "AtC (ridge)",
+    "atc_firth": "AtC (Firth)",
+    "llm_only": "LLM-only consensus",
 }
+REBUTTAL = ["ppi_bt_best", "ppi_bt_panel", "ridge_mu", "human_box", "human_ridge", "human_firth", "atc_ridge", "atc_firth"]
 
 STYLE = {
     "human_only": dict(color="#52514e", ls="-", marker="o", lw=1.2),
@@ -47,6 +58,15 @@ STYLE = {
     "dial_mle_w": dict(color="#a9c8ea", ls="-.", marker="d", lw=0.9),
     "oracle": dict(color="#0b0b0b", ls=":", marker=None, lw=0.9),
     "dial_rsel": dict(color="#b07aa1", ls="-", marker="P", lw=0.9),
+    "ppi_bt_best": dict(color="#2f6f9f", ls="--", marker="h", lw=1.1),
+    "ppi_bt_panel": dict(color="#2f6f9f", ls="-", marker="H", lw=1.1),
+    "ridge_mu": dict(color="#6c8e3f", ls="-.", marker="p", lw=1.1),
+    "human_box": dict(color="#52514e", ls="--", marker="o", lw=1.0),
+    "human_ridge": dict(color="#8c8b87", ls="-.", marker="s", lw=1.0),
+    "human_firth": dict(color="#8c8b87", ls=":", marker="d", lw=1.0),
+    "atc_ridge": dict(color="#b8860b", ls="-.", marker="D", lw=1.0),
+    "atc_firth": dict(color="#b8860b", ls=":", marker="d", lw=1.0),
+    "llm_only": dict(color="#1baf7a", ls=":", marker="*", lw=1.0),
 }
 
 INK, INK_SOFT, GRID = "#0b0b0b", "#52514e", "#e4e3df"
