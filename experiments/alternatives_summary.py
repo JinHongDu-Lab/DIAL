@@ -227,7 +227,42 @@ def main():
             by[int(nh)] = agg
         pd.concat(by.values()).to_csv(OUT / "orth.csv", index=False)
         fig_orth(by)
+    bootstrap_tables()
     print("wrote", sorted(p.name for p in OUT.iterdir()), "and", [f"fig_{n}.pdf" for n in ("real_alternatives","real_matched","simu_matched","simu_orth")])
+
+
+# --------------------------------------------------------------------------- group 4: record-level bootstrap
+BOOT_REAL_COLS = ["n_boot", "lam_boot_inf_frac", "lam_boot_zero_frac", "lam_boot_same_frac", "se_ratio_med", "se_ratio_q1", "se_ratio_q3", "se_ratio_fixed_med",
+                  "se_iid_over_cell_med", "width_sand", "width_boot", "adj_sep_sand", "adj_sep_boot", "agree_sand", "agree_boot", "n_sep_sand", "n_sep_boot", "human_only_exists"]
+BOOT_SYN_COLS = ["attenuation", "n_boot", "cov_sand_cell", "cov_sand_iid", "cov_sand_cell_s0", "cov_boot_pct", "cov_boot_wald", "cov_boot_pct_s0", "cov_boot_fixed_pct",
+                 "cov_boot_fixed_wald", "width_sand", "width_boot", "se_ratio_med", "se_ratio_fixed_med", "lam_boot_inf_frac", "lam_boot_zero_frac", "lam_boot_same_frac", "sand_dev"]
+
+
+def bootstrap_tables():
+    """Per-cell means (and s.e. of the coverage columns) of the record-level bootstrap runs."""
+    real = _rows(ROOT / "results" / "alternatives" / "bootstrap" / "rows.jsonl")
+    if not real.empty:
+        if "error" in real:
+            real = real[real["error"].isna()]
+        real = real.assign(lam_inf_frac=np.isinf(real["lam"].astype(float)).astype(float), lam_zero_frac=(real["lam"].astype(float) == 0).astype(float))
+        cols = [c for c in BOOT_REAL_COLS + ["lam_inf_frac", "lam_zero_frac"] if c in real]
+        g = real.groupby(["dataset", "level", "method"])
+        out = g[cols].mean(numeric_only=True)
+        out["n_splits"] = g.size()
+        out.reset_index().to_csv(OUT / "bootstrap_real.csv", index=False)
+    syn = _rows(ROOT / "results" / "alternatives" / "simulation" / "main10_record" / "bootstrap.jsonl")
+    if not syn.empty:
+        if "error" in syn:
+            syn = syn[syn["error"].isna()]
+        syn = syn.assign(lam_inf_frac=np.isinf(syn["lam"].astype(float)).astype(float))
+        cols = [c for c in BOOT_SYN_COLS + ["lam_inf_frac"] if c in syn]
+        g = syn.groupby(["n_H", "record_sd", "method"])
+        out = g[cols].mean(numeric_only=True)
+        for c in ("cov_sand_cell", "cov_boot_pct", "cov_boot_fixed_pct"):
+            if c in syn:
+                out[c + "_se"] = g[c].sem()
+        out["n_seeds"] = g.size()
+        out.reset_index().to_csv(OUT / "bootstrap_synthetic.csv", index=False)
 
 
 if __name__ == "__main__":
