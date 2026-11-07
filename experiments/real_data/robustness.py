@@ -74,8 +74,8 @@ def _display_path(path: Path) -> Path:
 SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest", "budget_full", "matched")
 NOISE_KINDS = ("random", "position", "anti")
 METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "atc_btl", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
-# rebuttal add-ons (experiments/real_data/rebuttal_methods.py): PPI++, ridge-to-consensus, regularized human baselines
-from .rebuttal_methods import REBUTTAL_METHODS, run_rebuttal_methods  # noqa: E402
+# alternative estimators (experiments/real_data/alternative_estimators.py): PPI++, ridge-to-consensus, regularized human baselines
+from .alternative_estimators import ALTERNATIVE_METHODS, run_alternative_estimators  # noqa: E402
 DATASET_CODE = {"arena_33k": 1, "mt_bench": 2, "pandalm": 3}
 
 
@@ -374,7 +374,7 @@ def build_cell(job):
 
 
 def build_matched_cell(job):
-    """Matched-pair design (rebuttal experiment 1b): n_H labeled train records carrying their
+    """Matched-pair design (matched design, ICLR 2027 experiment 1b): n_H labeled train records carrying their
     human label and every kept judge's verdicts in both display orders, plus n_U proxy-only train
     records with judge verdicts alone. DIAL sees the judge verdicts of all n_H + n_U records; PPI++
     sees the proxy on the same records, so both methods use the same LLM judgments. The job's
@@ -464,7 +464,7 @@ def run_cell(job):
         lam = float(lam)
         return dict(lam=lam, lam_rel=(lam * n_H_actual / n_L) if np.isfinite(lam) else float("inf"))
 
-    # ---- zero human budget (rebuttal `budget_full`): only the LLM-only consensus is defined.
+    # ---- zero human budget (`budget_full`): only the LLM-only consensus is defined.
     # Its scale is not calibrated, so `excess` is not meaningful and only the ranking metrics are.
     if n_H_actual == 0:
         try:
@@ -502,7 +502,7 @@ def run_cell(job):
 
     # ---- Cons-Cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
     st_mu = None
-    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu", "atc_btl", *REBUTTAL_METHODS):
+    if want("consensus_cal", "dial_mu", "oracle_test", "dial_mle_mu", "atc_btl", *ALTERNATIVE_METHODS):
         try:
             st_mu = calibrate_llm_fit(llm_fit(), pairs, consensus_only=True)
             if want("consensus_cal"):
@@ -517,9 +517,9 @@ def run_cell(job):
             rec("atc_btl", fit_atc_btl(N, st_mu["mu"], pairs)["s_H"])
         except Exception as e:  # noqa: BLE001
             fail("atc_btl", e)
-    # ---- rebuttal add-ons: PPI++, ridge-to-consensus, regularized human baselines
-    if want(*REBUTTAL_METHODS):
-        run_rebuttal_methods(cell, want, rec, fail, st_mu)
+    # ---- alternative estimators: PPI++, ridge-to-consensus, regularized human baselines
+    if want(*ALTERNATIVE_METHODS):
+        run_alternative_estimators(cell, want, rec, fail, st_mu)
     if st_mu is not None and want("dial_mu", "oracle_test"):
         try:
             sel = select_lambda(N, K, r_llm, pairs, n_ijk_llm=A[0], y_ijk_llm=A[1], n_order=A[2], y_order=A[3], staged_fit=st_mu, lambda_grid=lam_grid, return_all=True, align="mu")

@@ -63,8 +63,28 @@ Rows go to `results/real_robustness/<dataset>/rows.jsonl` and `results/intermedi
 `notebooks/3_real_data_calibration.ipynb` the human-calibration figures. Runs resume: cells already
 in the output are skipped, and `--methods` adds methods to existing cells.
 
+## Motivation figure
+
+`real_data/motivation.py`; Figure 1(b) in `notebooks/0_motivation.ipynb`. Model-free: every
+quantity is a sample proportion over records collected in both display orders, with a 200-replicate
+bootstrap clustered on `record_id` (seed 42, one resampled record set shared by all judges of a
+dataset).
+
+| Metric | Definition |
+|---|---|
+| `swap_inconsistency_rate` (panel a) | share of records, decisive in both orders, whose canonical verdict changes when the responses are swapped |
+| `agreement_consistent` (panel b, plotted as 1 minus) | agreement with the human label on records where the verdict is the same in both orders and the human label is decisive |
+| `first_position_rate` | share of non-tie judgments picking the first-displayed response (directional; reported, not plotted) |
+
+Judges with a tie rate above 0.5 or covering under half of a dataset's records are saved but left
+out of the figure (`ollama-stablelm2-12b-direct` in all three datasets).
+
+```bash
+python run_real_data.py motivation          # results/motivation/<dataset>/per_judge.csv, bootstrap.csv
+```
+
 ## Runtime
 
 Wall clock on an 18-core laptop with `--workers 16` and 50 seeds: about 1 to 2 minutes per
 simulation config, about 2 hours for the full real-data `--sweep all` (dominated by the GACV paths
-of the `llm_budget` sweep on Arena), and about 15 minutes for `intermediate`.
+of the `llm_budget` sweep on Arena), about 15 minutes for `intermediate`, and about 2 minutes for `motivation`.

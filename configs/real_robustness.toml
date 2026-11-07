@@ -89,9 +89,9 @@ settings = ["english_global", "nonenglish_global", "nonenglish_subset"]
 levels = [100, 200, 400, 800, 1600]
 f_test = 0.3
 
-# ---------------------------------------------------------------------------- rebuttal sweeps
+# ---------------------------------------------------------------------------- ICLR 2027 review sweeps
 # Kept apart from the stored sweeps above so that previous results are untouched.
-# Human-budget extension (ICLR rebuttal, group 2): zero budget (LLM-only consensus only) and the
+# Human-budget extension (ICLR 2027 reviews, group 2): zero budget (LLM-only consensus only) and the
 # high end where AtC and Human may overtake; same as-collected balanced LLM data as `budget`.
 [sweeps.budget_full]
 datasets = ["arena_33k", "mt_bench", "pandalm"]
@@ -102,7 +102,7 @@ arena_33k = [0, 3200]
 mt_bench = [0]
 pandalm = [0]
 
-# Matched-pair design (ICLR rebuttal, group 1): n_H labeled train records with their human label and
+# Matched-pair design (ICLR 2027 reviews, group 1): n_H labeled train records with their human label and
 # all judge verdicts in both orders, plus n_U proxy-only train records (-1 = all remaining).
 [sweeps.matched]
 datasets = ["arena_33k", "mt_bench", "pandalm"]

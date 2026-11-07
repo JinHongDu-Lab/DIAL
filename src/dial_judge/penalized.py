@@ -1,4 +1,4 @@
-"""Penalized human-only Bradley--Terry fits used as rebuttal baselines.
+"""Penalized human-only Bradley--Terry fits used as alternative baselines.
 
 * ``fit_ridge_btl``: centered BTL plus ``kappa * ||P s||^2``; with a consensus direction ``mu`` the
   projector ``P`` removes ``span(mu)``, so the penalty shrinks the human score toward the line

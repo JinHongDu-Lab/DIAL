@@ -1,12 +1,12 @@
-# ICLR 2027 rebuttal runs
+# Alternative estimators and matched designs (added after the ICLR 2027 reviews)
 
 Rules: stored results under `results/real_robustness`, `results/intermediate_budget`, and
-`results/simulation` are never rewritten; every rebuttal row goes to `results/rebuttal/`. PPI++ is
+`results/simulation` are never rewritten; every new row goes to `results/alternatives/`. PPI++ is
 run as defined (no penalty, box, or imputation); where the stored unmatched designs give it no
 matched verdicts the row records the failure. The matched-pair sweep exists for the comparison on
 PPI++'s own terms. Plan and status: `../../plan/2026-11-07-iclr-rebuttal-plan.md`.
 
-## Methods (`experiments/real_data/rebuttal_methods.py`, `experiments/style.py` `REBUTTAL`)
+## Methods (`experiments/real_data/alternative_estimators.py`, `experiments/style.py` `ALTERNATIVES`)
 
 | Key | Name | Definition |
 |---|---|---|
@@ -27,8 +27,8 @@ Row fields added by PPI++: `ppi_status` (ok / partial / failed), `n_labeled_matc
 ```bash
 python run_real_data.py robustness --sweep budget --panels all \
     --methods ppi_bt_best,ppi_bt_panel,ridge_mu,human_box,human_ridge,human_firth,atc_ridge,atc_firth \
-    --seeds 0:50 --workers 8 --out results/rebuttal/budget
-python run_real_data.py intermediate --seeds 50 --workers 8 --tag rebuttal --out results/rebuttal/intermediate_budget \
+    --seeds 0:50 --workers 8 --out results/alternatives/budget
+python run_real_data.py intermediate --seeds 50 --workers 8 --tag alternatives --out results/alternatives/intermediate_budget \
     --methods ppi_bt_best,ppi_bt_panel,ridge_mu,human_box,human_ridge,human_firth,atc_ridge,atc_firth
 python run_simulation.py --config main10 --row nH --seeds 0:50 --workers 6 --addon      # PPI++ rows record unmatched_design
 ```
@@ -36,7 +36,7 @@ python run_simulation.py --config main10 --row nH --seeds 0:50 --workers 6 --add
 ## Experiment 1b: matched-pair design
 
 ```bash
-python run_real_data.py robustness --sweep matched --seeds 0:50 --workers 8 --out results/rebuttal/matched \
+python run_real_data.py robustness --sweep matched --seeds 0:50 --workers 8 --out results/alternatives/matched \
     --methods human_only,consensus_cal,dial_mu,atc_btl,ppi_bt_best,ppi_bt_panel,ridge_mu,human_firth
 python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6           # the stored method panel
 python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6 --addon   # PPI++, ridge_mu, human_firth
@@ -51,7 +51,7 @@ records, human target s_H = mu.
 ## Group 2: human-budget extension
 
 ```bash
-python run_real_data.py robustness --sweep budget_full --panels all --seeds 0:50 --workers 8 --out results/rebuttal/budget
+python run_real_data.py robustness --sweep budget_full --panels all --seeds 0:50 --workers 8 --out results/alternatives/budget
 ```
 
 `budget_full` adds n_H = 0 (only `llm_only` is defined) and n_H = 3200 on Arena with the full

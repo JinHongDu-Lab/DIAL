@@ -78,12 +78,12 @@ CONFIGS = {
     "main10_pos": dict(N=10, K=4, r=1, n_L_fixed=20000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0,
                        sigma_L=dict(pos=0.0), sigma_pos_grid=[0.0, 0.25, 0.5, 0.75, 1.0],
                        n_H_grid=[800], n_L_grid=[20000]),
-    # rebuttal (ICLR 2027, experiment 1b): matched-pair design for the PPI++ comparison. Every record is
+    # ICLR 2027 experiment 1b: matched-pair design for the PPI++ comparison. Every record is
     # answered by all K judges; the labeled records also carry a human outcome. n_L here counts
     # records (n_U proxy-only records are added), so the judge verdicts number K (n_H + n_U).
     "main10_matched": dict(N=10, K=4, r=1, n_L_fixed=5000, n_H_fixed=800, swap_fraction=0.25, c_v_sd=0.0, matched=True,
                            sigma_L=dict(nH=0.0), n_H_grid=[100, 200, 400, 800, 1600], n_L_grid=[5000]),
-    # rebuttal (ICLR 2027, R3-Q1): human target with a component orthogonal to the whole LLM space,
+    # ICLR 2027 R3-Q1: human target with a component orthogonal to the whole LLM space,
     # s_0 = mu + rho ||mu|| u / ||u|| with u orthogonal to {1, mu, V}; the `orth` row varies rho at each
     # n_H of `orth_n_H_grid`, so the approximation errors Delta_mu, Delta_W of Theorem 3 grow with rho
     # while the LLM side stays exactly specified. The row's third cell slot carries rho.
@@ -91,7 +91,7 @@ CONFIGS = {
                         sigma_L=dict(orth=0.0), orth_grid=[0.0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0], orth_n_H_grid=[200, 800],
                         n_H_grid=[800], n_L_grid=[20000]),
 }
-# add-on methods of the rebuttal (run by `--addon`, written to a separate file): PPI++ with the best
+# add-on methods (run by `--addon`, written to a separate file): PPI++ with the best
 # single judge or the panel majority as proxy (defined only on a matched design), ridge toward the
 # LLM consensus, and the Firth-penalized human fit
 ADDON_METHODS = ["ppi_bt_best", "ppi_bt_panel", "ridge_mu", "human_firth"]
@@ -309,7 +309,7 @@ def run_cell(args):
 
 
 def run_addon_cell(args):
-    """Rebuttal add-on methods only (ADDON_METHODS), on the same cell as `run_cell` would draw.
+    """Add-on methods only (ADDON_METHODS), on the same cell as `run_cell` would draw.
 
     PPI++ needs a proxy verdict on each human-labeled record; the stored configurations draw the
     human and LLM comparisons separately, so there PPI++ is recorded as failed with reason
@@ -396,10 +396,10 @@ def main():
     p.add_argument("--seeds", default="0:10", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)
-    p.add_argument("--addon", action="store_true", help="run only the rebuttal add-on methods (ADDON_METHODS) into results/rebuttal/simulation/<config>/rows.jsonl")
+    p.add_argument("--addon", action="store_true", help="run only the add-on methods (ADDON_METHODS) into results/alternatives/simulation/<config>/rows.jsonl")
     a = p.parse_args()
     s0, s1 = (int(x) for x in a.seeds.split(":"))
-    default_out = f"results/rebuttal/simulation/{a.config}/rows.jsonl" if a.addon else f"results/simulation/{a.config}/rows.jsonl"
+    default_out = f"results/alternatives/simulation/{a.config}/rows.jsonl" if a.addon else f"results/simulation/{a.config}/rows.jsonl"
     out = Path(a.out or default_out)
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)

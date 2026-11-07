@@ -1,4 +1,4 @@
-"""Tests for the rebuttal add-ons: Bradley--Terry PPI++, penalized human fits, and their wiring
+"""Tests for the alternative estimators: Bradley--Terry PPI++, penalized human fits, and their wiring
 into the real-data cells (on a hand-built frame, never on the shipped data)."""
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from scipy.special import expit
 from dial_judge.baselines import fit_human_only_btl
 from dial_judge.penalized import fit_boxed_btl, fit_ridge_btl, fit_ridge_btl_fixed
 from dial_judge.ppi import fit_bt_ppi, ppi_lambda
-from experiments.real_data import rebuttal_methods as rm
+from experiments.real_data import alternative_estimators as rm
 from experiments.real_data import robustness as rb
-from experiments.real_data.rebuttal_methods import REBUTTAL_METHODS
+from experiments.real_data.alternative_estimators import ALTERNATIVE_METHODS
 
 
 def _records(s, n, rng, proxy_noise=0.0):
@@ -120,15 +120,15 @@ def _frame(n_records=120, judges=("j1", "j2", "j3"), items=("m1", "m2", "m3", "m
 
 
 @pytest.mark.slow
-def test_rebuttal_methods_in_budget_and_matched_cells(monkeypatch):
+def test_alternative_estimators_in_budget_and_matched_cells(monkeypatch):
     cfg = rb.load_config()
     cfg["study"]["exclude_judges"] = []
     monkeypatch.setitem(rb._PANELS, "mt_bench", rb.build_panel(_frame()))
-    cfg["_only_methods"] = list(REBUTTAL_METHODS) + ["consensus_cal", "human_only"]
+    cfg["_only_methods"] = list(ALTERNATIVE_METHODS) + ["consensus_cal", "human_only"]
     rows = rb.run_cell(("mt_bench", "budget", "all", "none", 40, None, 0, cfg))
     by = {r["method"]: r for r in rows}
-    assert set(REBUTTAL_METHODS) <= set(by)
-    for m in REBUTTAL_METHODS:
+    assert set(ALTERNATIVE_METHODS) <= set(by)
+    for m in ALTERNATIVE_METHODS:
         assert "error" not in by[m], by[m].get("error")
     assert by["ppi_bt_panel"]["ppi_status"] == "ok" and 0.0 <= by["ppi_bt_panel"]["lam"] <= 1.0
     rows = rb.run_cell(("mt_bench", "matched", "all", "none", 30, 20, 0, cfg))

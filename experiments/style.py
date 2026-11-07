@@ -31,7 +31,7 @@ LABEL = {
     "dial_mle_w": "DIAL-Ada ($W$), fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "oracle": "oracle weight",
     "dial_rsel": "DIAL-Ada, rank by GACV",
-    # rebuttal add-ons (ICLR 2027): PPI-type and shrinkage comparisons, regularized human baselines
+    # alternative estimators (added after the ICLR 2027 reviews): PPI-type and shrinkage comparisons, regularized human baselines
     "ppi_bt_best": "PPI++ (best judge)",
     "ppi_bt_panel": "PPI++ (panel)",
     "ridge_mu": "Ridge-to-LLM",
@@ -42,7 +42,7 @@ LABEL = {
     "atc_firth": "AtC (Firth)",
     "llm_only": "LLM-only consensus",
 }
-REBUTTAL = ["ppi_bt_best", "ppi_bt_panel", "ridge_mu", "human_box", "human_ridge", "human_firth", "atc_ridge", "atc_firth"]
+ALTERNATIVES = ["ppi_bt_best", "ppi_bt_panel", "ridge_mu", "human_box", "human_ridge", "human_firth", "atc_ridge", "atc_firth"]
 
 STYLE = {
     "human_only": dict(color="#52514e", ls="-", marker="o", lw=1.2),

@@ -1,10 +1,10 @@
-"""Tables and figures of the ICLR 2027 rebuttal runs (results/rebuttal/, plus the stored rows of the
+"""Tables and figures of the alternative-estimator runs (results/alternatives/, plus the stored rows of the
 methods they are compared with). Run from the repository root:
 
-    python -m experiments.rebuttal_summary
+    python -m experiments.alternatives_summary
 
-Writes results/rebuttal/summary/*.csv (per-cell means with Monte Carlo s.e. and fit counts) and
-figures/rebuttal_*.pdf with the shared method panel of experiments/style.py.
+Writes results/alternatives/summary/*.csv (per-cell means with Monte Carlo s.e. and fit counts) and
+figures/fig_real_alternatives.pdf, fig_real_matched.pdf, fig_simu_matched.pdf, fig_simu_orth.pdf with the shared method panel of experiments/style.py.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from experiments import style
 from experiments.style import DATASET_LABEL, LABEL, legend_handles, mark_better, method_lines
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "results" / "rebuttal" / "summary"
+OUT = ROOT / "results" / "alternatives" / "summary"
 FIG = ROOT / "figures"
 
 BUDGET_METHODS = ["human_only", "human_box", "human_ridge", "human_firth", "ppi_bt_best", "ppi_bt_panel", "ridge_mu", "atc_btl", "atc_firth", "consensus_cal", "dial_mu"]
@@ -48,23 +48,23 @@ def _job_rows(path):
 def budget_rows(dataset):
     old = _rows(ROOT / "results" / "real_robustness" / dataset / "rows.jsonl")
     old = old[(old.sweep == "budget") & (old.panel == "all")]
-    new = _rows(ROOT / "results" / "rebuttal" / "budget" / dataset / "rows.jsonl")
+    new = _rows(ROOT / "results" / "alternatives" / "budget" / dataset / "rows.jsonl")
     return pd.concat([old, new[new.panel == "all"]], ignore_index=True)
 
 
 def matched_rows(dataset):
-    return _rows(ROOT / "results" / "rebuttal" / "matched" / dataset / "rows.jsonl")
+    return _rows(ROOT / "results" / "alternatives" / "matched" / dataset / "rows.jsonl")
 
 
 def intermediate_rows():
     old = _job_rows(ROOT / "results" / "intermediate_budget" / "jobs.jsonl")
-    new = _job_rows(ROOT / "results" / "rebuttal" / "intermediate_budget" / "jobs_rebuttal.jsonl")
+    new = _job_rows(ROOT / "results" / "alternatives" / "intermediate_budget" / "jobs_alternatives.jsonl")
     return pd.concat([old, new], ignore_index=True)
 
 
 def synthetic_rows(config):
     return pd.concat([_rows(ROOT / "results" / "simulation" / config / "rows.jsonl"),
-                      _rows(ROOT / "results" / "rebuttal" / "simulation" / config / "rows.jsonl")], ignore_index=True)
+                      _rows(ROOT / "results" / "alternatives" / "simulation" / config / "rows.jsonl")], ignore_index=True)
 
 
 # --------------------------------------------------------------------------- aggregation
@@ -116,7 +116,7 @@ def fig_budget(agg_by_dataset):
         axes[1, c].set_yscale("log")
     h, l = legend_handles(BUDGET_METHODS)
     fig.legend(h, l, loc="lower center", ncol=6, bbox_to_anchor=(0.5, -0.07), frameon=False)
-    fig.savefig(FIG / "rebuttal_budget.pdf", bbox_inches="tight")
+    fig.savefig(FIG / "fig_real_alternatives.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -128,7 +128,7 @@ def fig_matched(agg_by_dataset):
         axes[1, c].set_yscale("log")
     h, l = legend_handles(MATCHED_METHODS)
     fig.legend(h, l, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.07), frameon=False)
-    fig.savefig(FIG / "rebuttal_matched.pdf", bbox_inches="tight")
+    fig.savefig(FIG / "fig_real_matched.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -142,7 +142,7 @@ def fig_synthetic_matched(agg, N=10, d=1):
     _panel(axes[1], agg, "n_H", "kendall", SYN_METHODS, ylabel=r"Kendall's $\tau$", better="up")
     h, l = legend_handles(SYN_METHODS, extra=[(r"$(N-1)/(2n_{\mathrm{H}})$, $d/(2n_{\mathrm{H}})$", dict(color=style.INK, ls=":"))])
     fig.legend(h, l, loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.12), frameon=False)
-    fig.savefig(FIG / "rebuttal_synthetic_matched.pdf", bbox_inches="tight")
+    fig.savefig(FIG / "fig_simu_matched.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -165,7 +165,7 @@ def fig_orth(agg_by_nh):
                     ax.axvline(rho_c, ls=":", color=style.INK, lw=0.8)
     h, l = legend_handles(ORTH_METHODS, extra=[("Theorem 3 crossover", dict(color=style.INK, ls=":"))])
     fig.legend(h, l, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.07), frameon=False)
-    fig.savefig(FIG / "rebuttal_orth.pdf", bbox_inches="tight")
+    fig.savefig(FIG / "fig_simu_orth.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -227,7 +227,7 @@ def main():
             by[int(nh)] = agg
         pd.concat(by.values()).to_csv(OUT / "orth.csv", index=False)
         fig_orth(by)
-    print("wrote", sorted(p.name for p in OUT.iterdir()), "and", sorted(p.name for p in FIG.glob("rebuttal_*.pdf")))
+    print("wrote", sorted(p.name for p in OUT.iterdir()), "and", [f"fig_{n}.pdf" for n in ("real_alternatives","real_matched","simu_matched","simu_orth")])
 
 
 if __name__ == "__main__":

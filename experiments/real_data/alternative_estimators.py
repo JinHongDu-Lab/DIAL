@@ -1,4 +1,4 @@
-"""Rebuttal add-on methods for the real-data cells (ICLR 2027 reviews, groups 1 and 2).
+"""Alternative estimators for the real-data cells (added after the ICLR 2027 reviews, groups 1 and 2).
 
 Group 1 (PPI-type and shrinkage estimators of the human score):
   ppi_bt_best   Bradley--Terry PPI++ with the proxy of the single judge agreeing most with the
@@ -30,7 +30,7 @@ from dial_judge.ppi import fit_bt_ppi
 PPI_METHODS = ("ppi_bt_best", "ppi_bt_panel")
 GROUP1_METHODS = PPI_METHODS + ("ridge_mu",)
 GROUP2_METHODS = ("human_box", "human_ridge", "human_firth", "atc_ridge", "atc_firth")
-REBUTTAL_METHODS = GROUP1_METHODS + GROUP2_METHODS
+ALTERNATIVE_METHODS = GROUP1_METHODS + GROUP2_METHODS
 
 
 # --------------------------------------------------------------------------- proxies
@@ -96,7 +96,7 @@ def _atc_from_order(mu, s_stage1):
     return fitted - fitted.mean()
 
 
-def run_rebuttal_methods(cell, want, rec, fail, st_mu):
+def run_alternative_estimators(cell, want, rec, fail, st_mu):
     """Fit the requested add-on methods of one real-data cell.
 
     ``cell`` is the dict of ``robustness.build_cell`` (needs N, pairs, llm, cal); ``rec`` and
