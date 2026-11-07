@@ -68,6 +68,6 @@ def summarize(root):
                 exception_rows=int(x.error.notna().sum()) if 'error' in x else 0,
                 nonconverged_rows=int((x.converged == False).sum()),          # noqa: E712 - NaN must not count
                 irregular_selected_rows=int((x.selected_regular == False).sum()),  # noqa: E712
-                fallback_margin_rows=int((x.get('margin_reason') == 'all_irregular_fallback').sum()))
+                fallback_margin_rows=int((x['margin_reason'] == 'all_irregular_fallback').sum()) if 'margin_reason' in x else 0)
     (root / 'diagnostics.json').write_text(json.dumps(diag, indent=2) + '\n')
     print(diag, flush=True)
