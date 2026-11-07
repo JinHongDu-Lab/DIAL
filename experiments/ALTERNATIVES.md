@@ -12,7 +12,7 @@ PPI++'s own terms. Plan and status: `../../plan/2026-11-07-iclr-rebuttal-plan.md
 |---|---|---|
 | `ppi_bt_best` | PPI++ (best judge) | Bradley--Terry PPI++; proxy = the judge agreeing most with the cell's calibration labels |
 | `ppi_bt_panel` | PPI++ (panel) | the same with the panel majority verdict as proxy |
-| `ridge_mu` | Joint (l2) | human BTL + kappa ||P s||^2 shrinking toward span(mu_hat), kappa by approximate leave-one-out |
+| `ridge_mu` | Joint-l2 | human BTL + kappa ||P s||^2 shrinking toward span(mu_hat), kappa by approximate leave-one-out |
 | `human_box` | Human (box) | unpenalized human BTL on DIAL's coordinate box, box activity recorded |
 | `human_ridge` | Human (ridge) | ridge toward zero, kappa by approximate leave-one-out |
 | `human_firth` | Human (Firth) | Firth-penalized human BTL |
