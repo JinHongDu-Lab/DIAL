@@ -19,8 +19,10 @@ METRICS = ["excess", "logloss", "acc", "ref_kendall", "b_mean_abs", "b_inj_mean_
 MAIN_METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial", "dial_nodeb"]
 
 
-def load(dataset, base="."):
-    path = Path(base) / "results" / "real_robustness" / dataset / "rows.jsonl"
+def load(dataset, base=".", results="real_robustness"):
+    """Rows of one dataset under results/<results>/; `results` names the run directory, e.g.
+    `alternatives/budget` for the added estimators."""
+    path = Path(base) / "results" / results / dataset / "rows.jsonl"
     with open(path) as handle:
         df = pd.DataFrame([json.loads(line) for line in handle])
     for old, new in (("n_0", "n_H"), ("n_0_level", "n_H_level")):  # pre-rename rows.jsonl; coalesce if both schemas are present

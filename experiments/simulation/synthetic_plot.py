@@ -43,15 +43,18 @@ def normalize_schema(df):
     return df
 
 
-def load(cfg, base="."):
-    """Load results/simulation/<cfg>/rows.jsonl (relative to `base`) and flag irregular replications."""
-    rows = [json.loads(l) for l in open(Path(base) / "results" / "simulation" / cfg / "rows.jsonl")]
+def load(cfg, base=".", results="simulation"):
+    """Load results/<results>/<cfg>/rows.jsonl (relative to `base`) and flag irregular replications;
+    `results` is `alternatives/simulation` for the add-on estimators."""
+    rows = [json.loads(l) for l in open(Path(base) / "results" / results / cfg / "rows.jsonl")]
     df = normalize_schema(pd.DataFrame(rows))
     for c, _, _ in COLS:
         if c not in df:
             df[c] = np.nan
     if "error" in df:
         df = df[df["error"].isna()]
+    if "converged" not in df:          # the add-on rows carry no joint-fit convergence flag
+        df["converged"] = True
     # regularity: exclude a (row, cell, seed) if the staged endpoint or the fixed-weight joint fit did not converge
     key = CELL + ["seed"]
     bad = df[(df.method.isin(["consensus_cal", "dial_mle_mu"])) & (~df["converged"].fillna(True).astype(bool))][key].drop_duplicates()

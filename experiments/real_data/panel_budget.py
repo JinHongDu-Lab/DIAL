@@ -118,6 +118,38 @@ CALIBRATION_DATASET = 'arena_33k'      # the only benchmark whose item set makes
 CALIBRATION_PANEL = 'all'              # the paper's 21-judge panel
 ATC = 'atc_btl'                        # stage-matched external baseline, main-text figure only
 
+# Added estimators drawn with the three DIAL-study methods and AtC (experiments/style.py
+# `ALTERNATIVES`): PPI++ with the panel-majority proxy, the ridge-to-consensus shrinkage fit, and the
+# Firth-regularized human and AtC fits, which exist at every budget.
+ALTERNATIVE = ['ppi_bt_panel', 'ridge_mu', 'human_firth', 'atc_firth']
+ALTERNATIVE_ROOT = ROOT / 'results' / 'alternatives'
+
+
+def _alternative_agg(raw, level_column):
+    return raw.groupby([level_column, 'method']).agg(n_H=('n_H', 'mean'), excess=('excess', 'mean'), se=('excess', 'sem'),
+                                                      tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
+                                                      N=('N', 'first'), n_fits=('seed', 'size')).reset_index()
+
+
+def alternative_rows(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, methods=ALTERNATIVE):
+    """Means and Monte Carlo s.e. of the added estimators on the robustness `budget` sweep.
+
+    Read from results/alternatives/budget, which holds only these methods on the stored splits.
+    `n_fits` counts the finite fits per budget: PPI++ has no finite fit in some splits at the
+    smallest budgets, and the figures draw it only where all 50 are finite.
+    """
+    raw = load(ds, ROOT, results='alternatives/budget')
+    raw = raw[(raw.sweep == 'budget') & (raw.panel == panel) & raw.method.isin(methods) & (raw.seed < SEEDS) & (~raw.failed)]
+    return _alternative_agg(raw, 'level').assign(dataset=ds, panel=panel)
+
+
+def alternative_intermediate_rows(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, methods=ALTERNATIVE):
+    """The same estimators on the intermediate-LLM-budget run (its own `--tag alternatives` pass)."""
+    path = ALTERNATIVE_ROOT / 'intermediate_budget' / 'jobs_alternatives.jsonl'
+    x = pd.DataFrame([r for line in path.open() if line.strip() for r in json.loads(line)['rows']])
+    x = x[(x.dataset == ds) & (x.panel == panel) & x.method.isin(methods) & (x.seed < SEEDS) & x.error.isna()]
+    return _alternative_agg(x, 'n_H_level').assign(dataset=ds, panel=panel)
+
 
 def human_exists_budgets(ds=CALIBRATION_DATASET):
     """Human budgets at which the unrestricted human MLE exists in every record split.
@@ -160,7 +192,8 @@ def atc_rows(source, level_column, sweep=None, ds=CALIBRATION_DATASET, panel=CAL
 
 def calibration_rows(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL,
                      intermediate_root=None):
-    """The two frames the main-text calibration figure draws, each with its AtC pass appended.
+    """The two frames the main-text calibration figure draws, each with its AtC pass and the
+    added estimators appended.
 
     (a) the collected LLM judgments of the full judge panel, (b) the same panel at the
     intermediate LLM budget.
@@ -168,5 +201,6 @@ def calibration_rows(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALIBR
     intermediate_root = ROOT / 'results' / 'intermediate_budget' if intermediate_root is None else intermediate_root
     atc = [atc_rows(load(ds, ROOT), 'level', sweep='budget', ds=ds, panel=panel),
            atc_rows(intermediate_root, 'n_H_level', ds=ds, panel=panel)]
-    return [pd.concat([summary[summary.sweep == 'budget'], atc[0]], ignore_index=True),
-            pd.concat([intermediate, atc[1]], ignore_index=True)]
+    alt = [alternative_rows(ds=ds, panel=panel), alternative_intermediate_rows(ds=ds, panel=panel)]
+    return [pd.concat([summary[summary.sweep == 'budget'], atc[0], alt[0]], ignore_index=True),
+            pd.concat([intermediate, atc[1], alt[1]], ignore_index=True)]
