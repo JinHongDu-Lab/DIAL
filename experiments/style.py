@@ -34,7 +34,7 @@ LABEL = {
     # alternative estimators (added after the ICLR 2027 reviews): PPI-type and shrinkage comparisons, regularized human baselines
     "ppi_bt_best": "PPI++ (best judge)",
     "ppi_bt_panel": "PPI++ (panel)",
-    "ridge_mu": "Ridge-to-LLM",
+    "ridge_mu": "Joint ($\\ell_2$)",
     "human_box": "Human (box)",
     "human_ridge": "Human (ridge)",
     "human_firth": "Human (Firth)",
