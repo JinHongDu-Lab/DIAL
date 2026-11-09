@@ -151,6 +151,21 @@ def llm_only_tau(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL):
     return float(raw.ref_kendall.mean())
 
 
+def llm_only_raw_tau(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, n_L=None):
+    """Kendall's tau of the uncalibrated LLM-only consensus (`llm_only_raw`: DIAL's LLM-only fit, both
+    display orders), from the robustness rows: with all LLM judgments (`budget` sweep) when
+    `n_L` is None, else at that LLM budget (`llm_budget` sweep). It uses no human labels, so every
+    human-budget cell of a split carries the same value; one cell per split is kept. The LLM
+    subsample of an `llm_budget` cell depends only on the split seed, so it is the subsample of the
+    intermediate-budget run at the same n_L."""
+    raw = load(ds, ROOT)
+    raw = raw[(raw.panel == panel) & (raw.method == 'llm_only_raw') & (raw.seed < SEEDS) & (~raw.failed)]
+    raw = raw[raw.sweep == 'budget'] if n_L is None else raw[(raw.sweep == 'llm_budget') & (raw.level == n_L)]
+    raw = raw.drop_duplicates('seed')
+    assert len(raw) == SEEDS, len(raw)
+    return float(raw.ref_kendall.mean())
+
+
 def alternative_intermediate_rows(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, methods=ALTERNATIVE):
     """The same estimators on the intermediate-LLM-budget run (its own `--tag alternatives` pass)."""
     path = ALTERNATIVE_ROOT / 'intermediate_budget' / 'jobs_alternatives.jsonl'

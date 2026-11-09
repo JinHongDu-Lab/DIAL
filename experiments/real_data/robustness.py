@@ -73,7 +73,7 @@ def _display_path(path: Path) -> Path:
 
 SWEEPS = ("order", "noise", "noise_scarce", "budget", "llm_budget", "spectest", "budget_full", "matched")
 NOISE_KINDS = ("random", "position", "anti")
-METHODS = ("human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb", "atc_btl", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
+METHODS = ("human_only", "pooled_raw", "pooled_cal", "llm_only_raw", "consensus_cal", "dial_mu", "dial_nodeb", "atc_btl", "staged_w", "dial_w", "dial_mle_mu", "dial_mle_w", "oracle_test", "dial_rsel")
 # alternative estimators (experiments/real_data/alternative_estimators.py): PPI++, ridge-to-consensus, regularized human baselines
 from .alternative_estimators import ALTERNATIVE_METHODS, run_alternative_estimators  # noqa: E402
 DATASET_CODE = {"arena_33k": 1, "mt_bench": 2, "pandalm": 3}
@@ -483,11 +483,15 @@ def run_cell(job):
             rec("human_only", fit_human_only_btl(N, pairs)["s_H"], lam=0.0)
         except Exception as e:  # noqa: BLE001
             fail("human_only", e)
-    if want("pooled_cal"):
+    if want("pooled_cal", "pooled_raw"):
         try:
             pooled = fit_pooled_btl(N, A[0], A[1])["score"]
-            al, _ = fit_human_calibration(pooled, np.zeros((N, 0)), pairs)
-            rec("pooled_cal", al * pooled, alpha=float(al))
+            if want("pooled_raw"):
+                # uncalibrated: the pooled BTL score used directly as log-odds, no human labels
+                rec("pooled_raw", pooled, **lam_fields(np.inf))
+            if want("pooled_cal"):
+                al, _ = fit_human_calibration(pooled, np.zeros((N, 0)), pairs)
+                rec("pooled_cal", al * pooled, alpha=float(al))
         except Exception as e:  # noqa: BLE001
             fail("pooled_cal", e)
 
@@ -499,6 +503,15 @@ def run_cell(job):
         if "fit" not in _llm_fit:
             _llm_fit["fit"] = fit_hja(N, K, r_llm, n_ijk=A[0], y_ijk=A[1], n_order=A[2], y_order=A[3])
         return _llm_fit["fit"]
+
+    # ---- uncalibrated LLM-only consensus: the average position-debiased judge score K^{-1} S^T 1
+    # (= mean(gamma) * mu, invariant to the normalization of mu) used directly as log-odds; it uses
+    # no human labels and is the LLM side that Cons-Cal calibrates (same LLM fit, both display orders).
+    if want("llm_only_raw"):
+        try:
+            rec("llm_only_raw", np.asarray(llm_fit()["S"], dtype=float).mean(axis=0), **lam_fields(np.inf))
+        except Exception as e:  # noqa: BLE001
+            fail("llm_only_raw", e)
 
     # ---- Cons-Cal (staged endpoint of DIAL) and DIAL: LLM side at rank r_llm, human score aligned to mu
     st_mu = None

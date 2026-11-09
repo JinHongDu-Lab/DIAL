@@ -117,6 +117,10 @@ for _k, _lab in (("oracle_mu", "oracle weight (DIAL-Ada path)"), ("oracle_w", "o
     LABEL[_k] = _lab
     STYLE[_k] = dict(STYLE["oracle"])
 STYLE["oracle_w"]["color"] = "#2a78d6"
+# The uncalibrated LLM-only consensus of the real-data rows (`llm_only_raw`: the average
+# position-debiased judge score used directly as log-odds, no human labels), drawn like `llm_only`.
+LABEL["llm_only_raw"] = "LLM-only consensus (uncalibrated)"
+STYLE["llm_only_raw"] = dict(STYLE["llm_only"])
 
 
 # --------------------------------------------------------------------------- drawing helpers
