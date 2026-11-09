@@ -31,6 +31,7 @@ The data are also on the Hugging Face Hub as
 
 | Paper output | Command | Drawn by |
 |---|---|---|
+| Figure 1(b): position bias and human misalignment | `python run_real_data.py motivation` | `notebooks/0_motivation.ipynb` |
 | Synthetic-study figures | `python run_simulation.py --config <main10, app20, main10_mis, main10_pos> ...` | `notebooks/1_simulation.ipynb` |
 | Position-debiasing figures | `python run_real_data.py robustness --sweep all --seeds 0:50` and `--clean-fit` | `notebooks/2_real_data_position.ipynb` |
 | Human-calibration figures | the robustness run above and `python run_real_data.py intermediate --seeds 50` | `notebooks/3_real_data_calibration.ipynb` |

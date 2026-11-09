@@ -3,12 +3,13 @@
     python run_real_data.py tables                            # dataset tables
     python run_real_data.py robustness --sweep all --seeds 0:50 --workers 12
     python run_real_data.py intermediate --seeds 50 --workers 8
+    python run_real_data.py motivation                        # Figure 1(b) descriptive summaries
     python run_real_data.py prepare                           # rebuild results/cache/ from data/
 """
 
 import sys
 
-STUDIES = ("tables", "robustness", "intermediate", "prepare")
+STUDIES = ("tables", "robustness", "intermediate", "motivation", "prepare")
 
 
 def main():
@@ -23,6 +24,9 @@ def main():
         run(argv)
     elif study == "intermediate":
         from experiments.real_data.intermediate_budget import main as run
+        run(argv)
+    elif study == "motivation":
+        from experiments.real_data.motivation import main as run
         run(argv)
     else:
         from experiments.real_data.prepare import SUPPORTED_DATASETS, load_canonical
