@@ -2,11 +2,11 @@
 
 The main study fits the LLM side with rank r = 1 (`configs/real_robustness.toml`). This script
 summarizes the same `budget` sweep refitted with r = 0 and r = 2
-(`configs/real_robustness_rank{0,2}.toml`, results under `results/real_robustness_rank/r{0,2}`)
+(`--llm-rank 0` and `--llm-rank 2`, results under `results/real_robustness_rank/r{0,2}`)
 next to r = 1, for the rank-dependent estimators, and the BIC choice of r on the full LLM panels.
 
     python -m experiments.real_data.robustness --sweep budget --seeds 0:50 --workers 8 \
-        --config configs/real_robustness_rank0.toml --methods consensus_cal,dial_mu,dial_w \
+        --llm-rank 0 --methods consensus_cal,dial_mu,dial_w \
         --out results/real_robustness_rank/r0
     python -m experiments.real_data.rank_sensitivity
 """

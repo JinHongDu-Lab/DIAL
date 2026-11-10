@@ -701,6 +701,7 @@ def main(argv=None):
     p.add_argument("--seeds", default="0:3", help="start:stop seed range (stop exclusive)")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--config", default=None)
+    p.add_argument("--llm-rank", type=int, default=None, help="override the LLM-side rank of the config (rank sensitivity)")
     p.add_argument("--out", default=None, help="results root (default results/real_robustness)")
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--select-rank", action="store_true")
@@ -710,6 +711,8 @@ def main(argv=None):
     p.add_argument("--panels", default=None, help="comma-separated judge panels: restrict every sweep to these")
     a = p.parse_args(argv)
     cfg = load_config(a.config)
+    if a.llm_rank is not None:
+        cfg["study"]["llm_rank"] = a.llm_rank
     # `--datasets` / `--panels` narrow every sweep's own grid, so a method can be added to one
     # dataset or judge panel without re-walking the whole design.
     for key, keep in (("datasets", a.datasets), ("panels", a.panels)):
