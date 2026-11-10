@@ -265,19 +265,26 @@ def select_rank(dataset, cfg, rank_cap=None):
     return best, {r: float(v["bic"]) for r, v in table.items()}
 
 
-def clean_fit(dataset, cfg, cluster="pair", r=1):
+def clean_fit(dataset, cfg, cluster="twoway", r=1):
     """Full-panel fits behind the judge diagnostics: the joint MLE with every decisive human label and,
-    for the per-judge order effects, the LLM-only fit; both with cell-clustered sandwich intervals."""
+    for the per-judge order effects, the LLM-only fit; both with two-way cluster-robust sandwich
+    intervals over records and judge-pair cells."""
     panel = get_panel(dataset, cfg)
     N, K = panel["N"], panel["K"]
-    n_ijk, y_ijk, n_order, y_order = llm_arrays(panel["llm"], N, K)
-    pairs = human_pairs(panel["human"])
+    llm, hum = panel["llm"], panel["human"]
+    n_ijk, y_ijk, n_order, y_order = llm_arrays(llm, N, K)
+    pairs = human_pairs(hum)
+    llm_obs = dict(k=llm["k"].to_numpy(int), i=llm["i"].to_numpy(int), j=llm["j"].to_numpy(int), y=llm["y"].to_numpy(float),
+                   a=llm["a"].to_numpy(float), rec=llm["record"].astype(str).to_numpy())
+    human_obs = dict(i=hum["i"].to_numpy(int), j=hum["j"].to_numpy(int), y=hum["y"].to_numpy(float), rec=hum["record"].astype(str).to_numpy())
+    obs = dict(llm_obs=llm_obs, human_obs=human_obs) if cluster in ("record", "twoway") else {}
     st = fit_staged_structured_calibration(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order)
     jt = fit_dial(N, K, r, n_ijk, y_ijk, pairs, n_order=n_order, y_order=y_order, init_params=(st["gamma"], st["mu"], st["U"], st["V"], st["b"]), tol=1e-6, max_steps=30)
-    sw = joint_sandwich(jt, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster=cluster)
+    sw = joint_sandwich(jt, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster=cluster, **obs)
     # the judge diagnostic is an LLM-side quantity, so it is reported from the LLM-only fit
-    # (the lambda = infinity fit, `st`) with the cell-clustered sandwich
-    sw_llm = llm_only_sandwich(st, N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, cluster=cluster)
+    # (the lambda = infinity fit, `st`) with the same meat restricted to the LLM block
+    sw_llm = llm_only_sandwich(st, N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, n_order=n_order, y_order=y_order, cluster=cluster,
+                               llm_obs=obs.get("llm_obs"))
     return dict(dataset=dataset, N=N, K=K, r=r, items=panel["items"], judges=panel["judges"], dropped_judges=panel["dropped_judges"],
                 n_L=float(n_order.sum()), n_H=float(sum(p[2] for p in pairs)), n_records=panel["n_records"], n_llm_ties=panel["n_llm_ties"], n_human_decisive=panel["n_human_decisive"],
                 b=[float(x) for x in jt["b"]], b_lower=[float(x) for x in sw["b"]["lower"]], b_upper=[float(x) for x in sw["b"]["upper"]],

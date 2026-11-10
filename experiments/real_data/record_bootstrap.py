@@ -8,6 +8,9 @@ remaining records (judge rows only), and repeat the whole fit, weight selection 
 original GACV grid. The job row stores, for DIAL-Ada and (where its MLE exists) Human-only:
 
   se ratio of bootstrap to sandwich over the contrasts (median and quartiles)
+  the record-clustered sandwich (Prop. record-cluster-inference): its s.e. relative to the cell
+  sandwich, the bootstrap-to-record-sandwich ratios, and its pair separation (`*_rec`), and the
+  same for the two-way sandwich over records and judge-pair cells (`*_two`)
   the selected weight across replicates
   share of ranking-adjacent pairs separated at 95% by each interval, and the sign agreement of the
   separated contrasts with the held-out human ranking (the practical-value demonstration)
@@ -31,7 +34,7 @@ from dial_judge.bootstrap import adjacent_separation, resample_within_strata, se
 from dial_judge.gacv import select_lambda
 from dial_judge.inference import human_only_uq
 from experiments.real_data import robustness as rb
-from experiments.simulation.record_bootstrap import candidate_at, sandwich_at_selection
+from experiments.simulation.record_bootstrap import candidate_at, sandwich_at_selection, sandwich_at_weight
 
 
 def _fit(N, K, r, A, pairs, lam_grid):
@@ -69,6 +72,37 @@ def run_job(job):
             row.update(adj_sep_sand=frac, n_adj_sep_sand=n_sep, agree_sand=agree, n_sep_sand=n_all)
         except Exception as e:  # noqa: BLE001
             row.update(sandwich_error=repr(e))
+        # ---- record-clustered sandwich at the selected weight: all judge rows and the human label of a record form one cluster
+        se_rec = None
+        try:
+            llm_obs = dict(k=llm["k"].to_numpy(int), i=llm["i"].to_numpy(int), j=llm["j"].to_numpy(int), y=llm["y"].to_numpy(float),
+                           a=llm["a"].to_numpy(float), rec=llm["record"].to_numpy())
+            human_obs = dict(i=cal["i"].to_numpy(int), j=cal["j"].to_numpy(int), y=cal["y"].to_numpy(float), rec=cal["record"].to_numpy())
+            c_rec = sandwich_at_weight(sel, lam_hat, N, K, r, pairs, A[0], A[1], A[2], A[3], cluster="record", llm_obs=llm_obs, human_obs=human_obs)
+            se_rec = np.asarray(c_rec["se"], float)
+            frac, n_sep = adjacent_separation(sel["s_H"], c_rec["lower"], c_rec["upper"])
+            agree, n_all = separated_sign_agreement(sel["s_H"], c_rec["lower"], c_rec["upper"], ref)
+            row.update(width_rec=float(np.mean(c_rec["upper"] - c_rec["lower"])), adj_sep_rec=frac, n_adj_sep_rec=n_sep, agree_rec=agree, n_sep_rec=n_all,
+                       contrast_se_rec=np.round(se_rec, 4).tolist())
+            if sw is not None:
+                row.update(se_rec_over_cell_med=float(np.median(se_rec / np.asarray(sw["contrasts"]["se"], float))))
+        except Exception as e:  # noqa: BLE001
+            row.update(record_sandwich_error=repr(e))
+        # ---- two-way sandwich (records and judge-pair cells), the interval reported on real data
+        se_two = None
+        try:
+            c_two = sandwich_at_weight(sel, lam_hat, N, K, r, pairs, A[0], A[1], A[2], A[3], cluster="twoway", llm_obs=llm_obs, human_obs=human_obs)
+            se_two = np.asarray(c_two["se"], float)
+            frac, n_sep = adjacent_separation(sel["s_H"], c_two["lower"], c_two["upper"])
+            agree, n_all = separated_sign_agreement(sel["s_H"], c_two["lower"], c_two["upper"], ref)
+            row.update(width_two=float(np.mean(c_two["upper"] - c_two["lower"])), adj_sep_two=frac, n_adj_sep_two=n_sep, agree_two=agree, n_sep_two=n_all,
+                       contrast_se_two=np.round(se_two, 4).tolist())
+            if sw is not None:
+                row.update(se_two_over_cell_med=float(np.median(se_two / np.asarray(sw["contrasts"]["se"], float))))
+            if se_rec is not None:
+                row.update(se_two_over_rec_med=float(np.median(se_two / se_rec)))
+        except Exception as e:  # noqa: BLE001
+            row.update(twoway_sandwich_error=repr(e))
         # ---- bootstrap: records resampled within the calibration and the proxy-only strata
         rec_llm = llm["record"].to_numpy()
         groups = llm.groupby("record").indices
@@ -110,6 +144,12 @@ def run_job(job):
             se_sand = np.asarray(sw["contrasts"]["se"], float)
             row.update({f"se_ratio_{k}": v for k, v in _quartiles(bs["se"] / se_sand).items()})
             row.update({f"se_ratio_fixed_{k}": v for k, v in _quartiles(bf["se"] / se_sand).items()})
+        if se_rec is not None:
+            row.update({f"se_ratio_rec_{k}": v for k, v in _quartiles(bs["se"] / se_rec).items()})
+            row.update({f"se_ratio_fixed_rec_{k}": v for k, v in _quartiles(bf["se"] / se_rec).items()})
+        if se_two is not None:
+            row.update({f"se_ratio_two_{k}": v for k, v in _quartiles(bs["se"] / se_two).items()})
+            row.update({f"se_ratio_fixed_two_{k}": v for k, v in _quartiles(bf["se"] / se_two).items()})
         row.update(contrast_est=np.round(bs["estimate"], 4).tolist(), contrast_se_boot=np.round(bs["se"], 4).tolist(),
                    contrast_se_sand=(np.round(sw["contrasts"]["se"], 4).tolist() if sw is not None else None), s_hat=np.round(sel["s_H"], 4).tolist())
         out.append(row)

@@ -233,21 +233,46 @@ def main():
 
 # --------------------------------------------------------------------------- group 4: record-level bootstrap
 BOOT_REAL_COLS = ["n_boot", "lam_boot_inf_frac", "lam_boot_zero_frac", "lam_boot_same_frac", "se_ratio_med", "se_ratio_q1", "se_ratio_q3", "se_ratio_fixed_med",
-                  "se_iid_over_cell_med", "width_sand", "width_boot", "adj_sep_sand", "adj_sep_boot", "agree_sand", "agree_boot", "n_sep_sand", "n_sep_boot", "human_only_exists"]
+                  "se_iid_over_cell_med", "width_sand", "width_boot", "adj_sep_sand", "adj_sep_boot", "agree_sand", "agree_boot", "n_sep_sand", "n_sep_boot", "human_only_exists",
+                  "se_rec_over_cell_med", "se_ratio_rec_med", "se_ratio_fixed_rec_med", "width_rec", "adj_sep_rec", "agree_rec", "n_sep_rec",
+                  "se_two_over_cell_med", "se_two_over_rec_med", "se_ratio_two_med", "se_ratio_fixed_two_med", "width_two", "adj_sep_two", "agree_two", "n_sep_two"]
 BOOT_SYN_COLS = ["attenuation", "n_boot", "cov_sand_cell", "cov_sand_iid", "cov_sand_cell_s0", "cov_boot_pct", "cov_boot_wald", "cov_boot_pct_s0", "cov_boot_fixed_pct",
-                 "cov_boot_fixed_wald", "width_sand", "width_boot", "se_ratio_med", "se_ratio_fixed_med", "lam_boot_inf_frac", "lam_boot_zero_frac", "lam_boot_same_frac", "sand_dev"]
+                 "cov_boot_fixed_wald", "width_sand", "width_boot", "se_ratio_med", "se_ratio_fixed_med", "lam_boot_inf_frac", "lam_boot_zero_frac", "lam_boot_same_frac", "sand_dev",
+                 "cov_sand_rec", "width_sand_rec", "se_rec_over_cell_med", "se_ratio_rec_med", "se_ratio_fixed_rec_med",
+                 "lam_pre_rel", "cov_sand_cell_pre", "cov_sand_rec_pre", "se_rec_over_cell_pre_med",
+                 "cov_sand_two", "width_sand_two", "se_two_over_cell_med", "se_two_over_rec_med", "se_ratio_two_med", "se_ratio_fixed_two_med", "cov_sand_two_pre"]
+
+
+def _adjacent_se_ratio(row, key="contrast_se_rec"):
+    """Median record- (or two-way-) to-cell sandwich s.e. ratio over the N - 1 ranking-adjacent contrasts of one split."""
+    rec, cell, s_hat = row.get(key), row.get("contrast_se_sand"), row.get("s_hat")
+    if not isinstance(rec, list) or not isinstance(cell, list) or not isinstance(s_hat, list):
+        return np.nan
+    s_hat = np.asarray(s_hat, float)
+    tri = {pair: q for q, pair in enumerate(zip(*np.triu_indices(s_hat.size, 1)))}
+    order = np.argsort(-s_hat)
+    adj = [tri[tuple(sorted((int(a), int(b))))] for a, b in zip(order[:-1], order[1:])]
+    return float(np.median(np.asarray(rec, float)[adj] / np.asarray(cell, float)[adj]))
 
 
 def bootstrap_tables():
-    """Per-cell means (and s.e. of the coverage columns) of the record-level bootstrap runs."""
+    """Per-cell means (and s.e. of the coverage columns) of the record-level bootstrap runs; real-data s.e. ratios are medians over splits."""
     real = _rows(ROOT / "results" / "alternatives" / "bootstrap" / "rows.jsonl")
     if not real.empty:
         if "error" in real:
             real = real[real["error"].isna()]
         real = real.assign(lam_inf_frac=np.isinf(real["lam"].astype(float)).astype(float), lam_zero_frac=(real["lam"].astype(float) == 0).astype(float))
-        cols = [c for c in BOOT_REAL_COLS + ["lam_inf_frac", "lam_zero_frac"] if c in real]
+        if "contrast_se_rec" in real:
+            real["se_rec_over_cell_adj_med"] = [_adjacent_se_ratio(r) for _, r in real.iterrows()]
+        if "contrast_se_two" in real:
+            real["se_two_over_cell_adj_med"] = [_adjacent_se_ratio(r, "contrast_se_two") for _, r in real.iterrows()]
+        cols = [c for c in BOOT_REAL_COLS + ["lam_inf_frac", "lam_zero_frac", "se_rec_over_cell_adj_med", "se_two_over_cell_adj_med"] if c in real]
         g = real.groupby(["dataset", "level", "method"])
         out = g[cols].mean(numeric_only=True)
+        # s.e. ratios: median over splits, since a single near-separated split can dominate the mean
+        ratio_cols = [c for c in cols if c.startswith(("se_ratio", "se_rec", "se_two"))]
+        out[ratio_cols] = g[ratio_cols].median(numeric_only=True)
+        out["lam_boot_same_frac_med"] = g["lam_boot_same_frac"].median() if "lam_boot_same_frac" in real else np.nan
         out["n_splits"] = g.size()
         out.reset_index().to_csv(OUT / "bootstrap_real.csv", index=False)
     syn = _rows(ROOT / "results" / "alternatives" / "simulation" / "main10_record" / "bootstrap.jsonl")
@@ -258,7 +283,7 @@ def bootstrap_tables():
         cols = [c for c in BOOT_SYN_COLS + ["lam_inf_frac"] if c in syn]
         g = syn.groupby(["n_H", "record_sd", "method"])
         out = g[cols].mean(numeric_only=True)
-        for c in ("cov_sand_cell", "cov_boot_pct", "cov_boot_fixed_pct"):
+        for c in ("cov_sand_cell", "cov_boot_pct", "cov_boot_fixed_pct", "cov_sand_rec", "cov_sand_cell_pre", "cov_sand_rec_pre", "cov_sand_two", "cov_sand_two_pre"):
             if c in syn:
                 out[c + "_se"] = g[c].sem()
         out["n_seeds"] = g.size()

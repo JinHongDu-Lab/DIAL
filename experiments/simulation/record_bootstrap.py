@@ -7,6 +7,10 @@ including the weight selection. Reported per cell and method:
 
   cov_sand_cell / cov_sand_iid   coverage of the cell-clustered and the independent sandwich
                                   Wald intervals at the selected weight (Theorem 4, Appendix E)
+  cov_sand_rec                    the same with the record-clustered meat (Prop. record-cluster-inference)
+  cov_sand_two                    the same with the two-way meat (records and judge-pair cells)
+  cov_*_pre                       cell-, record-, and two-way-sandwich coverage at the prespecified weight
+                                  lambda = n_L / n_H (equal per-comparison weight), the setting of the proposition
   cov_boot_pct / cov_boot_wald    coverage of the bootstrap percentile and bootstrap-s.e. intervals
                                   that repeat the weight selection
   cov_boot_fixed_pct              the same with the weight held at the original selection
@@ -57,6 +61,32 @@ def candidate_at(sel, lam):
         if l == lam or (np.isinf(l) and np.isinf(lam)):
             return f
     return None
+
+
+def matched_observations(llm, hum, K):
+    """Comparison-level arrays with record ids for the record-clustered meat: record t holds the K
+    judge rows llm[t K : (t + 1) K] and, for t < len(hum), the human label hum[t]."""
+    arr = np.asarray(llm, dtype=float)
+    harr = np.asarray(hum, dtype=float)
+    llm_obs = dict(k=arr[:, 0].astype(int), i=arr[:, 1].astype(int), j=arr[:, 2].astype(int), y=arr[:, 3], a=arr[:, 4],
+                   rec=np.repeat(np.arange(arr.shape[0] // K), K))
+    human_obs = dict(i=harr[:, 1].astype(int), j=harr[:, 2].astype(int), y=harr[:, 3], rec=np.arange(harr.shape[0]))
+    return llm_obs, human_obs
+
+
+def sandwich_at_weight(sel, lam, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="pair", llm_obs=None, human_obs=None):
+    """Sandwich contrasts of the candidate fit at weight `lam` of a GACV selection, with the given meat.
+
+    lam = 0 gives the human-only BTL intervals (human comparisons are independent records), and
+    lam = infinity is evaluated at the largest finite weight of the grid as in `sandwich_at_selection`."""
+    if lam == 0:
+        f0 = candidate_at(sel, 0.0)
+        return human_only_uq(N, pairs, (f0 if f0 is not None else sel)["s_H"])["contrasts"]
+    if np.isinf(lam):
+        lam = max(l for l, _ in sel["candidates"] if np.isfinite(l) and l > 0)
+    fit = dict(candidate_at(sel, lam), lam=lam)
+    sw = joint_sandwich(fit, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster=cluster, llm_obs=llm_obs, human_obs=human_obs)
+    return sw["contrasts"]
 
 
 def mixture_target(s0, record_sd, n_nodes=40):
@@ -145,6 +175,38 @@ def run_cell(args):
         except Exception as e:  # noqa: BLE001
             row_out.update(sandwich_error=repr(e))
             se_sand = None
+        llm_obs, human_obs = matched_observations(llm, hum, K)
+        se_rec = None
+        try:
+            c_rec = sandwich_at_weight(sel, lam_hat, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="record", llm_obs=llm_obs, human_obs=human_obs)
+            se_rec = np.asarray(c_rec["se"], float)
+            row_out.update(cov_sand_rec=coverage(truth, c_rec["lower"], c_rec["upper"]), width_sand_rec=float(np.mean(c_rec["upper"] - c_rec["lower"])))
+            if se_sand is not None:
+                row_out.update(se_rec_over_cell_med=float(np.nanmedian(se_rec / se_sand)))
+        except Exception as e:  # noqa: BLE001
+            row_out.update(record_sandwich_error=repr(e))
+        se_two = None
+        try:
+            c_two = sandwich_at_weight(sel, lam_hat, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="twoway", llm_obs=llm_obs, human_obs=human_obs)
+            se_two = np.asarray(c_two["se"], float)
+            row_out.update(cov_sand_two=coverage(truth, c_two["lower"], c_two["upper"]), width_sand_two=float(np.mean(c_two["upper"] - c_two["lower"])))
+            if se_sand is not None:
+                row_out.update(se_two_over_cell_med=float(np.nanmedian(se_two / se_sand)))
+            if se_rec is not None:
+                row_out.update(se_two_over_rec_med=float(np.nanmedian(se_two / se_rec)))
+        except Exception as e:  # noqa: BLE001
+            row_out.update(twoway_sandwich_error=repr(e))
+        try:
+            lam_pre = min((l for l, _ in sel["candidates"] if np.isfinite(l) and l > 0), key=lambda l: abs(np.log(l * n_lab / len(llm))))
+            c_pre = sandwich_at_weight(sel, lam_pre, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="pair")
+            c_pre_rec = sandwich_at_weight(sel, lam_pre, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="record", llm_obs=llm_obs, human_obs=human_obs)
+            row_out.update(lam_pre=float(lam_pre), lam_pre_rel=float(lam_pre * n_lab / len(llm)),
+                           cov_sand_cell_pre=coverage(truth, c_pre["lower"], c_pre["upper"]), cov_sand_rec_pre=coverage(truth, c_pre_rec["lower"], c_pre_rec["upper"]),
+                           se_rec_over_cell_pre_med=float(np.nanmedian(np.asarray(c_pre_rec["se"], float) / np.asarray(c_pre["se"], float))))
+            c_pre_two = sandwich_at_weight(sel, lam_pre, N, K, r, pairs, n_ijk, y_ijk, n_order, y_order, cluster="twoway", llm_obs=llm_obs, human_obs=human_obs)
+            row_out.update(cov_sand_two_pre=coverage(truth, c_pre_two["lower"], c_pre_two["upper"]))
+        except Exception as e:  # noqa: BLE001
+            row_out.update(prespecified_error=repr(e))
         S_post, S_fixed, lams = np.full((B, N), np.nan), np.full((B, N), np.nan), np.full(B, np.nan)
         for bidx in range(B):
             draw = resample_within_strata([np.arange(n_lab), np.arange(n_lab, len(blocks))], rng)
@@ -171,6 +233,10 @@ def run_cell(args):
                        lam_boot_same_frac=float(np.mean(lams[~np.isnan(lams)] == lam_hat)) if np.any(~np.isnan(lams)) else np.nan)
         if se_sand is not None:
             row_out.update(se_ratio_med=float(np.nanmedian(bs["se"] / se_sand)), se_ratio_fixed_med=float(np.nanmedian(bf["se"] / se_sand)))
+        if se_rec is not None:
+            row_out.update(se_ratio_rec_med=float(np.nanmedian(bs["se"] / se_rec)), se_ratio_fixed_rec_med=float(np.nanmedian(bf["se"] / se_rec)))
+        if se_two is not None:
+            row_out.update(se_ratio_two_med=float(np.nanmedian(bs["se"] / se_two)), se_ratio_fixed_two_med=float(np.nanmedian(bf["se"] / se_two)))
         out.append(row_out)
     except Exception as e:  # noqa: BLE001
         fail("dial_mu", e)

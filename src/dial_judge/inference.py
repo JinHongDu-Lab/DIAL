@@ -115,10 +115,12 @@ def human_only_uq(N, human_pairs, s_hat, alpha=0.05, rcond=1e-10):
 # Joint DIAL sandwich
 # ---------------------------------------------------------------------------
 
-def _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, return_cluster=False):
+def _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, return_cluster=False, return_keys=False):
     """Per-cell linear-predictor gradients x_c in chart coordinates, with counts (n_c, y_c) and eta_c.
 
-    With return_cluster=True also returns an integer cluster id per cell (judge x pair)."""
+    With return_cluster=True also returns an integer cluster id per cell (judge x pair); with
+    return_keys=True also returns the cell key (k * n_orders + a_idx) * n_pairs + pair_index, where
+    pair_index enumerates np.triu_indices(N, 1)."""
     gamma, mu, U, V, b, _alpha, _a = unpack_reduced(zeta, N, K, r, judge_basis, item_basis, use_order)
     tri_i, tri_j = np.triu_indices(N, k=1)
     n_g = K - 1
@@ -128,7 +130,7 @@ def _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order,
     off_V = off_mu + (N - 1)
     dim = zeta.size
 
-    rows, n_c, y_c, eta_c, cl = [], [], [], [], []
+    rows, n_c, y_c, eta_c, cl, keys = [], [], [], [], [], []
     n_pairs_total = tri_i.size
     orders = ORDER_A if use_order else np.array([0.0])
     for k in range(K):
@@ -161,8 +163,13 @@ def _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order,
             y_c.append(yy[mask])
             eta_c.append(eta)
             cl.append(k * n_pairs_total + np.flatnonzero(mask))
+            keys.append((k * orders.size + a_idx) * n_pairs_total + np.flatnonzero(mask))
     out = (np.vstack(rows), np.concatenate(n_c), np.concatenate(y_c), np.concatenate(eta_c))
-    return out + (np.concatenate(cl),) if return_cluster else out
+    if return_cluster:
+        out = out + (np.concatenate(cl),)
+    if return_keys:
+        out = out + (np.concatenate(keys),)
+    return out
 
 
 def llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, cluster=None):
@@ -191,6 +198,85 @@ def llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_or
     G = np.zeros((uniq.size, X.shape[1]))
     np.add.at(G, inv, X * resid[:, None] - np.outer(n_c, g_bar))
     return G.T @ G / n_L, n_L
+
+
+def _llm_record_score_sums(X, n_c, y_c, p, keys, llm_obs, rec_index, n_rec, N, K, use_order):
+    """Per-record sums of the centered per-comparison LLM scores, sum_{u in t} (g_u - g_bar_L),
+    with g_u = x_{cell(u)} (p_{cell(u)} - y_u); returns an (n_rec, dim) array.
+
+    `rec_index` maps each LLM comparison to its record row in 0..n_rec-1."""
+    from scipy.sparse import coo_matrix
+
+    n_orders = 2 if use_order else 1
+    tri_i, tri_j = np.triu_indices(N, k=1)
+    pair_index = np.full((N, N), -1, dtype=np.int64)
+    pair_index[tri_i, tri_j] = np.arange(tri_i.size)
+    lookup = np.full(K * n_orders * tri_i.size, -1, dtype=np.int64)
+    lookup[keys] = np.arange(keys.size)
+    k = np.asarray(llm_obs["k"], dtype=np.int64)
+    i = np.asarray(llm_obs["i"], dtype=np.int64)
+    j = np.asarray(llm_obs["j"], dtype=np.int64)
+    y = np.asarray(llm_obs["y"], dtype=float)
+    a_idx = (np.asarray(llm_obs["a"]) > 0).astype(np.int64) if use_order else np.zeros(k.size, dtype=np.int64)
+    if np.any(i >= j):
+        raise ValueError("llm_obs must use the canonical orientation i < j")
+    row = lookup[(k * n_orders + a_idx) * tri_i.size + pair_index[i, j]]
+    if np.any(row < 0) or k.size != int(round(n_c.sum())):
+        raise ValueError("llm_obs do not match the aggregated LLM counts")
+    g_bar = X.T @ (n_c * p - y_c) / k.size
+    A = coo_matrix((p[row] - y, (rec_index, row)), shape=(n_rec, X.shape[0])).tocsr()
+    return np.asarray(A @ X) - np.bincount(rec_index, minlength=n_rec)[:, None] * g_bar[None, :]
+
+
+def record_score_meat(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, lam, n_H, n_L, llm_obs, human_obs):
+    """Record-clustered meat J^rec of the weighted criterion (Appendix E.2: the HAC meat with the same-record kernel).
+
+    Each comparison v contributes the centered score psi_v = (g_v - g_bar_H) / n_H if it is a human
+    comparison and psi_v = lam (g_v - g_bar_L) / n_L if it is an LLM comparison; with U_t the sum of
+    psi_v over the comparisons of record t (all judge verdicts and any human label),
+    J^rec = n_H sum_t U_t U_t^T. It is the HAC meat with kernel 1{rec(v) = rec(w)}: with one
+    comparison per record it returns V_0 + lam^2 (n_H / n_L) V_L of `joint_sandwich`.
+
+    llm_obs:   dict of arrays k, i, j (i < j, canonical), a (+1 if i shown first, -1 otherwise),
+               y (1 if i preferred, 0.5 for a tie), rec (record id); these must be the comparisons
+               aggregated into (n_order, y_order) or (n_ijk, y_ijk).
+    human_obs: dict of arrays i, j, y, rec for the human comparisons of the fit.
+    Record ids of the two dicts share one namespace, so a human label joins the verdicts on its record.
+    """
+    X, n_c, y_c, eta, keys = _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, return_keys=True)
+    p = expit(eta)
+    dim = X.shape[1]
+    n_llm_obs = np.asarray(llm_obs["k"]).size
+
+    hi = np.asarray(human_obs["i"], dtype=np.int64)
+    hj = np.asarray(human_obs["j"], dtype=np.int64)
+    g_H = human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, hi, hj, np.asarray(human_obs["y"], dtype=float))
+    if g_H.shape[0] != int(round(n_H)):
+        raise ValueError("human_obs do not match n_H")
+
+    rec_L, rec_H = np.asarray(llm_obs["rec"]), np.asarray(human_obs["rec"])
+    _, inv = np.unique(np.concatenate([rec_L.astype(str), rec_H.astype(str)]), return_inverse=True)
+    inv = inv.ravel()
+    inv_L, inv_H = inv[:n_llm_obs], inv[n_llm_obs:]
+    n_rec = int(inv.max()) + 1
+
+    U = (lam / n_L) * _llm_record_score_sums(X, n_c, y_c, p, keys, llm_obs, inv_L, n_rec, N, K, use_order)
+    UH = np.zeros((n_rec, dim))
+    np.add.at(UH, inv_H, (g_H - g_H.mean(axis=0)) / n_H)
+    U += UH
+    return n_H * (U.T @ U)
+
+
+def _intersection_obs(llm_obs, human_obs=None):
+    """Observation dicts whose `rec` groups the intersection of a record and a judge-pair cell: one
+    judge's verdicts on one record (a record holds one item pair). Human labels are singletons in the
+    cell kernel, so each becomes its own group."""
+    rec = np.asarray(llm_obs["rec"]).astype(str)
+    inter_L = dict(llm_obs, rec=np.char.add(np.char.add(rec, "|"), np.asarray(llm_obs["k"]).astype(str)))
+    if human_obs is None:
+        return inter_L, None
+    n = np.asarray(human_obs["i"]).size
+    return inter_L, dict(human_obs, rec=np.char.add("H|", np.arange(n).astype(str)))
 
 
 def _target_jacobian(zeta, N, K, r, judge_basis, item_basis, use_order, eps=1e-6):
@@ -224,6 +310,8 @@ def joint_sandwich(
     hess_eps=1e-5,
     llm_variation=True,
     cluster=None,
+    llm_obs=None,
+    human_obs=None,
 ):
     """
     Sandwich covariance for a joint DIAL fit at fixed lambda (Thm. weighted-asymptotic-normality).
@@ -231,6 +319,14 @@ def joint_sandwich(
     Returns covariances of s_cal (N x N), S (KN x KN), b (K x K) and Wald
     intervals for pairwise contrasts of s_cal and for b. With
     llm_variation=False the LLM sampling term is dropped (tau = 0 formula).
+    cluster=None treats comparisons as independent, cluster="pair" clusters the LLM comparisons by
+    judge-pair cell, and cluster="record" uses the record-clustered meat of `record_score_meat`
+    (Prop. record-cluster-inference), which needs the comparison-level `llm_obs` and `human_obs`.
+    cluster="twoway" clusters by records and by judge-pair cells, with meat
+    J^rec + J^cell - J^(rec and cell) (Cameron, Gelbach, and Miller, 2011), where the intersection
+    groups one judge's verdicts on one record. The two-way meat need not be positive semidefinite;
+    a negative variance of a reported target would show as a zero standard error.
+    Without `llm_obs` every comparison is its own record and the two-way meat is the cell meat.
     """
     use_order = n_order is not None
     if use_order and n_ijk is None:
@@ -256,7 +352,17 @@ def joint_sandwich(
     g_t = human_observation_grads(zeta, N, K, r, judge_basis, item_basis, use_order, i_obs, j_obs, z_obs)
     g_bar = g_t.mean(axis=0)
     V0 = (g_t - g_bar).T @ (g_t - g_bar) / n_H
-    if llm_variation:
+    if cluster == "twoway" and llm_obs is None:
+        cluster = "pair"
+    if cluster in ("record", "twoway"):
+        if llm_obs is None or human_obs is None:
+            raise ValueError(f'cluster="{cluster}" needs llm_obs and human_obs')
+        args = (zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, lam, n_H, n_L)
+        J = record_score_meat(*args, llm_obs, human_obs)
+        if cluster == "twoway":
+            VL, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, cluster="pair")
+            J = J + V0 + lam ** 2 * (n_H / n_L) * VL - record_score_meat(*args, *_intersection_obs(llm_obs, human_obs))
+    elif llm_variation:
         VL, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, cluster=cluster)
         J = V0 + lam ** 2 * (n_H / n_L) * VL
     else:
@@ -293,8 +399,13 @@ def joint_sandwich(
 
 
 def llm_only_sandwich(fit, N, K, r, n_ijk=None, y_ijk=None, n_order=None, y_order=None,
-                      alpha=0.05, rcond=1e-9, hess_eps=1e-5, cluster="pair"):
+                      alpha=0.05, rcond=1e-9, hess_eps=1e-5, cluster="pair", llm_obs=None):
     """Cluster-robust Wald intervals for b from the LLM-only structured fit (the lambda = infinity fit).
+
+    cluster="pair" clusters by judge-pair cell; cluster="record" clusters all judge verdicts on a
+    record (needs the comparison-level `llm_obs` with record ids, see `record_score_meat`), so that
+    V_L^{rec} = n_L^{-1} sum_t (sum_{u in t} (g_u - g_bar))(...)^T; cluster="twoway" joins both as in
+    `joint_sandwich`.
 
     Same cell-clustered meat as `joint_sandwich`, specialized to the LLM block:
     the criterion is ell_L / n_L alone, so
@@ -330,8 +441,26 @@ def llm_only_sandwich(fit, N, K, r, n_ijk=None, y_ijk=None, n_order=None, y_orde
         return l_l / n_L, np.concatenate([p / n_L for p in parts] + [np.zeros(n_tail)])
 
     H = hessian_from_grad(grad_fn, zeta, eps=hess_eps)
-    J, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order,
-                                n_order, y_order, n_ijk, y_ijk, cluster=cluster)
+    if cluster == "twoway" and llm_obs is None:
+        cluster = "pair"
+    if cluster in ("record", "twoway"):
+        if llm_obs is None:
+            raise ValueError(f'cluster="{cluster}" needs llm_obs')
+        X, n_c, y_c, eta, keys = _llm_cell_design(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, return_keys=True)
+
+        def by_record(obs):
+            _, rec_index = np.unique(np.asarray(obs["rec"]).astype(str), return_inverse=True)
+            rec_index = rec_index.ravel()
+            G = _llm_record_score_sums(X, n_c, y_c, expit(eta), keys, obs, rec_index, int(rec_index.max()) + 1, N, K, use_order)
+            return G.T @ G / n_L
+
+        J = by_record(llm_obs)
+        if cluster == "twoway":
+            J_cell, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order, n_order, y_order, n_ijk, y_ijk, cluster="pair")
+            J = J + J_cell - by_record(_intersection_obs(llm_obs)[0])
+    else:
+        J, _ = llm_score_covariance(zeta, N, K, r, judge_basis, item_basis, use_order,
+                                    n_order, y_order, n_ijk, y_ijk, cluster=cluster)
     # drop the human-side coordinates (alpha and a), which the LLM criterion does not involve
     keep = np.arange(zeta.size - n_tail)
     H_inv = np.linalg.pinv(H[np.ix_(keep, keep)], rcond=rcond)
