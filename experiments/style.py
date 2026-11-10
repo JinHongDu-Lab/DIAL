@@ -31,7 +31,7 @@ LABEL = {
     "dial_mle_w": "DIAL-Ada ($W$), fixed weight $n_{\\mathrm{L}}/n_{\\mathrm{H}}$",
     "oracle": "oracle weight",
     "dial_rsel": "DIAL-Ada, rank by GACV",
-    # alternative estimators (added after the ICLR 2027 reviews): PPI-type and shrinkage comparisons, regularized human baselines
+    # alternative estimators: PPI-type and shrinkage comparisons, regularized human baselines
     "ppi_bt_best": "PPI++ (best judge)",
     "ppi_bt_panel": "PPI++ (panel)",
     "ridge_mu": "Joint-$\\ell_2$",

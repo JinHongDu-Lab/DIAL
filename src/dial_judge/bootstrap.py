@@ -1,4 +1,4 @@
-"""Record-level bootstrap summaries for the calibrated score (ICLR 2027 group 4, R1-W4 and R1-Q4).
+"""Record-level bootstrap summaries for the calibrated score.
 
 The unit of resampling is the record: all judge verdicts on a record and its human label, if
 any, move together, so dependence among the comparisons of one record is preserved. Records are

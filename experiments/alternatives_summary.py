@@ -1,4 +1,4 @@
-"""Tables and figures of the alternative-estimator runs (results/alternatives/, plus the stored rows of the
+"""Tables and figures of the alternative-estimator runs (results/alternatives/, plus the rows of the
 methods they are compared with). Run from the repository root:
 
     python -m experiments.alternatives_summary
@@ -197,7 +197,6 @@ def main():
         agg = aggregate(sub, "level", ["ref_kendall", "excess"], MATCHED_METHODS)
         agg.insert(0, "dataset", ds)
         matched[ds] = agg
-        full = aggregate(df, "level", ["ref_kendall", "excess"], MATCHED_METHODS + ["panel", "n_H_level"]) if False else None
         for (panel, nu), g in df.groupby(["panel", "n_H_level"]):
             aggregate(g, "level", ["ref_kendall", "excess"], MATCHED_METHODS).assign(dataset=ds, panel=panel, n_U_level=nu).to_csv(OUT / f"matched_{ds}_{panel}_nU{nu}.csv", index=False)
         ppi_status(sub, "level").assign(dataset=ds).to_csv(OUT / f"matched_ppi_status_{ds}.csv", index=False)
@@ -231,7 +230,7 @@ def main():
     print("wrote", sorted(p.name for p in OUT.iterdir()), "and", [f"fig_{n}.pdf" for n in ("real_alternatives","real_matched","simu_matched","simu_orth")])
 
 
-# --------------------------------------------------------------------------- group 4: record-level bootstrap
+# --------------------------------------------------------------------------- record-level bootstrap
 BOOT_REAL_COLS = ["n_boot", "lam_boot_inf_frac", "lam_boot_zero_frac", "lam_boot_same_frac", "se_ratio_med", "se_ratio_q1", "se_ratio_q3", "se_ratio_fixed_med",
                   "se_iid_over_cell_med", "width_sand", "width_boot", "adj_sep_sand", "adj_sep_boot", "agree_sand", "agree_boot", "n_sep_sand", "n_sep_boot", "human_only_exists",
                   "se_rec_over_cell_med", "se_ratio_rec_med", "se_ratio_fixed_rec_med", "width_rec", "adj_sep_rec", "agree_rec", "n_sep_rec",

@@ -15,7 +15,7 @@ PURPOSE = ("Human-budget sweep at the middle LLM budget of the llm_budget sweep,
 
 
 def build_config(methods=None, datasets=None, panels=None):
-    """The run's design; `methods`, `datasets` and `panels` narrow it for a later add-on pass."""
+    """The run's design; `methods`, `datasets` and `panels` narrow it to a subset of the design."""
     cfg = rb.load_config()
     cfg["_only_methods"] = list(methods) if methods else ["consensus_cal", "dial_mu"]
     if not methods:
@@ -33,7 +33,7 @@ def main(argv=None):
     p.add_argument("--seeds", type=int, default=5)
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--out", type=Path, default=rb.ROOT / "results" / "intermediate_budget")
-    p.add_argument("--methods", default=None, help="comma-separated method keys for an add-on pass over the same cells")
+    p.add_argument("--methods", default=None, help="comma-separated method keys to run on the same cells")
     p.add_argument("--datasets", default=None, help="comma-separated datasets (default: all three)")
     p.add_argument("--panels", default=None, help="comma-separated judge panels (default: all three)")
     p.add_argument("--tag", default=None, help="suffix of the pass's own jobs/design files, e.g. `atc`")

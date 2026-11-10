@@ -1,4 +1,4 @@
-"""Tests for the record-level bootstrap helpers and runners (group 4), on tiny problems."""
+"""Tests for the record-level bootstrap helpers and runners, on tiny problems."""
 from __future__ import annotations
 
 import numpy as np

@@ -1,12 +1,12 @@
-"""Alternative estimators for the real-data cells (added after the ICLR 2027 reviews, groups 1 and 2).
+"""Alternative estimators for the real-data cells (Appendix G comparisons).
 
-Group 1 (PPI-type and shrinkage estimators of the human score):
+PPI-type and shrinkage estimators of the human score:
   ppi_bt_best   Bradley--Terry PPI++ with the proxy of the single judge agreeing most with the
                 human labels of the cell's own calibration sample
   ppi_bt_panel  the same with the panel majority verdict as proxy
   ridge_mu      centered human BTL shrunk toward span(mu_hat) of the LLM-only consensus, ALO kappa
 
-Group 2 (regularized human baselines for the small-budget regime):
+Regularized human baselines for the small-budget regime:
   human_box     unpenalized human BTL on DIAL's coordinate box
   human_ridge   ridge toward zero, ALO kappa
   human_firth   Firth-penalized human BTL
@@ -97,7 +97,7 @@ def _atc_from_order(mu, s_stage1):
 
 
 def run_alternative_estimators(cell, want, rec, fail, st_mu):
-    """Fit the requested add-on methods of one real-data cell.
+    """Fit the requested alternative estimators of one real-data cell.
 
     ``cell`` is the dict of ``robustness.build_cell`` (needs N, pairs, llm, cal); ``rec`` and
     ``fail`` are the cell's row writers; ``st_mu`` is the staged consensus fit (None when it

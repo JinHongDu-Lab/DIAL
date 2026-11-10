@@ -300,7 +300,7 @@ def generate_human_comparisons(s_H, total_comparisons, random_seed=42, pair_subs
 
 
 def generate_matched_comparisons(S, b, s_H, n_labeled, n_unlabeled, random_seed=42, swap_fraction=0.5, record_sd=0.0):
-    """Matched-pair design (matched design, ICLR 2027 experiment 1b): every record is one item pair answered by
+    """Matched-pair design: every record is one item pair answered by
     every judge once, with its own display order drawn as in `generate_random_llm_comparisons`;
     the first `n_labeled` records also carry a human outcome from `s_H`, the remaining
     `n_unlabeled` are proxy-only.

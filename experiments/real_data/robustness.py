@@ -381,7 +381,7 @@ def build_cell(job):
 
 
 def build_matched_cell(job):
-    """Matched-pair design (matched design, ICLR 2027 experiment 1b): n_H labeled train records carrying their
+    """Matched-pair design: n_H labeled train records carrying their
     human label and every kept judge's verdicts in both display orders, plus n_U proxy-only train
     records with judge verdicts alone. DIAL sees the judge verdicts of all n_H + n_U records; PPI++
     sees the proxy on the same records, so both methods use the same LLM judgments. The job's

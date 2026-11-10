@@ -118,7 +118,7 @@ CALIBRATION_DATASET = 'arena_33k'      # the only benchmark whose item set makes
 CALIBRATION_PANEL = 'all'              # the paper's 21-judge panel
 ATC = 'atc_btl'                        # stage-matched external baseline, main-text figure only
 
-# Added estimators drawn with the three DIAL-study methods and AtC (experiments/style.py
+# Alternative estimators drawn with the three DIAL-study methods and AtC (experiments/style.py
 # `ALTERNATIVES`): PPI++ with the panel-majority proxy, the ridge-to-consensus shrinkage fit, and the
 # Firth-regularized human and AtC fits, which exist at every budget.
 ALTERNATIVE = ['ppi_bt_panel', 'ridge_mu', 'human_firth', 'atc_firth']
@@ -132,7 +132,7 @@ def _alternative_agg(raw, level_column):
 
 
 def alternative_rows(ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL, methods=ALTERNATIVE):
-    """Means and Monte Carlo s.e. of the added estimators on the robustness `budget` sweep.
+    """Means and Monte Carlo s.e. of the alternative estimators on the robustness `budget` sweep.
 
     Read from results/alternatives/budget, which holds only these methods on the stored splits.
     `n_fits` counts the finite fits per budget: PPI++ has no finite fit in some splits at the
@@ -216,7 +216,7 @@ def atc_rows(source, level_column, sweep=None, ds=CALIBRATION_DATASET, panel=CAL
 def calibration_rows(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALIBRATION_PANEL,
                      intermediate_root=None):
     """The two frames the main-text calibration figure draws, each with its AtC pass and the
-    added estimators appended.
+    alternative estimators appended.
 
     (a) the collected LLM judgments of the full judge panel, (b) the same panel at the
     intermediate LLM budget.

@@ -1,4 +1,4 @@
-"""Sandwich against record-level bootstrap intervals on the matched synthetic design (group 4).
+"""Sandwich against record-level bootstrap intervals on the matched synthetic design.
 
 For each cell of the `record` row of `main10_record` (human budget x record-effect s.d.), the
 DIAL-Ada fit is computed once with its GACV-selected weight, and B record-level bootstrap

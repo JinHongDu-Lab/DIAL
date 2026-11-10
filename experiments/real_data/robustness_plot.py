@@ -21,7 +21,7 @@ MAIN_METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial", 
 
 def load(dataset, base=".", results="real_robustness"):
     """Rows of one dataset under results/<results>/; `results` names the run directory, e.g.
-    `alternatives/budget` for the added estimators."""
+    `alternatives/budget` for the alternative estimators."""
     path = Path(base) / "results" / results / dataset / "rows.jsonl"
     with open(path) as handle:
         df = pd.DataFrame([json.loads(line) for line in handle])

@@ -1,4 +1,4 @@
-"""Record-level bootstrap of the DIAL-Ada intervals on real data (group 4: R1-Q4, R2-W2(ii)).
+"""Record-level bootstrap of the DIAL-Ada intervals on real data.
 
 One job is a stored `budget` cell (dataset, panel, human budget, split seed) built exactly as the
 robustness study builds it. The original fit gives the GACV-selected weight and the cell-clustered

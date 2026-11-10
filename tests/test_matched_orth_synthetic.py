@@ -1,4 +1,4 @@
-"""Tests for the matched-pair synthetic design and the add-on runner."""
+"""Tests for the matched-pair synthetic design and the alternative-estimator runner."""
 from __future__ import annotations
 
 import numpy as np
