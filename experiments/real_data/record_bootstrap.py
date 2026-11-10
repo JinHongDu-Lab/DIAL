@@ -30,7 +30,7 @@ import numpy as np
 
 from dial_judge.baselines import calibrate_llm_fit, fit_human_only_btl
 from dial_judge.benchmarks import fit_hja
-from dial_judge.bootstrap import adjacent_separation, resample_within_strata, separated_sign_agreement, summarize_contrasts
+from dial_judge.bootstrap import adjacent_separation, draw_within_strata, separated_sign_agreement, summarize_contrasts
 from dial_judge.gacv import select_lambda
 from dial_judge.inference import human_only_uq
 from experiments.real_data import robustness as rb
@@ -49,7 +49,8 @@ def _quartiles(x):
 
 
 def run_job(job):
-    dataset, panel_name, level, seed, cfg, B = job
+    dataset, panel_name, level, seed, cfg, B, *rest = job
+    scheme = rest[0] if rest else "boot"
     t0 = time.perf_counter()
     cell = rb.build_cell((dataset, "budget", panel_name, "none", level, None, seed, cfg))
     N, K, A, pairs, llm, cal, lam_grid, hum_test = (cell[k] for k in ("N", "K", "A", "pairs", "llm", "cal", "lam_grid", "hum_test"))
@@ -114,7 +115,7 @@ def run_job(job):
         S_post, S_fixed, lams = np.full((B, N), np.nan), np.full((B, N), np.nan), np.full(B, np.nan)
         rng = np.random.default_rng([int(seed), rb.DATASET_CODE[dataset], 7, int(level)])
         for bidx in range(B):
-            draw = resample_within_strata(strata, rng)
+            draw = draw_within_strata(strata, rng, scheme)
             idx = np.concatenate([groups[records[t]] for t in draw])
             llm_b = llm.iloc[idx]
             cal_b = cal.iloc[np.concatenate([cal_rows[records[t]] for t in draw if is_cal[t]])]
@@ -163,7 +164,7 @@ def run_job(job):
             rng = np.random.default_rng([int(seed), rb.DATASET_CODE[dataset], 8, int(level)])
             S_h = np.full((B, N), np.nan)
             for bidx in range(B):
-                cal_b = cal.iloc[rng.integers(len(cal), size=len(cal))]
+                cal_b = cal.iloc[rng.integers(len(cal), size=len(cal))] if scheme == "boot" else cal.iloc[rng.choice(len(cal), size=len(cal) // 2, replace=False)]
                 try:
                     S_h[bidx] = fit_human_only_btl(N, rb.human_pairs(cal_b))["s_H"]
                 except Exception:  # noqa: BLE001
@@ -205,13 +206,14 @@ def main(argv=None):
     p.add_argument("--B", type=int, default=100)
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--out", default="results/alternatives/bootstrap/rows.jsonl")
+    p.add_argument("--scheme", choices=("boot", "half"), default="boot", help="record bootstrap or half-sampling without replacement")
     a = p.parse_args(argv)
     cfg = rb.load_config()
     s0, s1 = (int(x) for x in a.seeds.split(":"))
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)
-    jobs = [(d, pn, int(lv), s, cfg, a.B) for d in a.datasets.split(",") for pn in a.panels.split(",") for lv in a.levels.split(",") for s in range(s0, s1)
+    jobs = [(d, pn, int(lv), s, cfg, a.B, a.scheme) for d in a.datasets.split(",") for pn in a.panels.split(",") for lv in a.levels.split(",") for s in range(s0, s1)
             if (d, pn, float(lv), s) not in done]
     print(f"{len(jobs)} jobs to run ({len(done)} stored) -> {out}", flush=True)
     t0 = time.perf_counter()

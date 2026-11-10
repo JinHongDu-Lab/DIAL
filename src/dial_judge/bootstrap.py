@@ -24,6 +24,26 @@ def resample_within_strata(strata, rng):
     return np.concatenate(out) if out else np.zeros(0, dtype=int)
 
 
+def subsample_within_strata(strata, rng, frac=0.5):
+    """Half-sampling draw (without replacement) of record indices within each stratum.
+
+    With frac = 1/2 the spread of a smooth estimator over half-samples around the full-sample
+    estimate matches its sampling variance, var(theta_m - theta_n) ~ sigma^2 (1/m - 1/n) = sigma^2/n,
+    so no rescaling is needed; unlike the bootstrap it creates no duplicate records, which would
+    bias the leave-one-out-type GACV criterion toward human-heavy weights."""
+    out = []
+    for idx in strata:
+        idx = np.asarray(idx)
+        if idx.size:
+            out.append(rng.choice(idx, size=int(round(frac * idx.size)), replace=False))
+    return np.concatenate(out) if out else np.zeros(0, dtype=int)
+
+
+def draw_within_strata(strata, rng, scheme="boot"):
+    """`boot`: with-replacement record bootstrap; `half`: half-sampling without replacement."""
+    return resample_within_strata(strata, rng) if scheme == "boot" else subsample_within_strata(strata, rng)
+
+
 def summarize_contrasts(s_hat, s_boot, alpha=0.05):
     """Bootstrap standard errors and intervals for all pairwise contrasts of a score vector.
 

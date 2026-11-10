@@ -256,39 +256,42 @@ def _adjacent_se_ratio(row, key="contrast_se_rec"):
 
 
 def bootstrap_tables():
-    """Per-cell means (and s.e. of the coverage columns) of the record-level bootstrap runs; real-data s.e. ratios are medians over splits."""
-    real = _rows(ROOT / "results" / "alternatives" / "bootstrap" / "rows.jsonl")
-    if not real.empty:
-        if "error" in real:
-            real = real[real["error"].isna()]
-        real = real.assign(lam_inf_frac=np.isinf(real["lam"].astype(float)).astype(float), lam_zero_frac=(real["lam"].astype(float) == 0).astype(float))
-        if "contrast_se_rec" in real:
-            real["se_rec_over_cell_adj_med"] = [_adjacent_se_ratio(r) for _, r in real.iterrows()]
-        if "contrast_se_two" in real:
-            real["se_two_over_cell_adj_med"] = [_adjacent_se_ratio(r, "contrast_se_two") for _, r in real.iterrows()]
-        cols = [c for c in BOOT_REAL_COLS + ["lam_inf_frac", "lam_zero_frac", "se_rec_over_cell_adj_med", "se_two_over_cell_adj_med"] if c in real]
-        g = real.groupby(["dataset", "level", "method"])
-        out = g[cols].mean(numeric_only=True)
-        # s.e. ratios: median over splits, since a single near-separated split can dominate the mean
-        ratio_cols = [c for c in cols if c.startswith(("se_ratio", "se_rec", "se_two"))]
-        out[ratio_cols] = g[ratio_cols].median(numeric_only=True)
-        out["lam_boot_same_frac_med"] = g["lam_boot_same_frac"].median() if "lam_boot_same_frac" in real else np.nan
-        out["n_splits"] = g.size()
-        out.reset_index().to_csv(OUT / "bootstrap_real.csv", index=False)
-    syn = _rows(ROOT / "results" / "alternatives" / "simulation" / "main10_record" / "bootstrap.jsonl")
-    if not syn.empty:
-        if "error" in syn:
-            syn = syn[syn["error"].isna()]
-        syn = syn.assign(lam_inf_frac=np.isinf(syn["lam"].astype(float)).astype(float))
-        cols = [c for c in BOOT_SYN_COLS + ["lam_inf_frac"] if c in syn]
-        g = syn.groupby(["n_H", "record_sd", "method"])
-        out = g[cols].mean(numeric_only=True)
-        for c in ("cov_sand_cell", "cov_boot_pct", "cov_boot_fixed_pct", "cov_sand_rec", "cov_sand_cell_pre", "cov_sand_rec_pre", "cov_sand_two", "cov_sand_two_pre"):
-            if c in syn:
-                out[c + "_se"] = g[c].sem()
-        out["n_seeds"] = g.size()
-        out.reset_index().to_csv(OUT / "bootstrap_synthetic.csv", index=False)
+    """Per-cell means (and s.e. of the coverage columns) of the record-level resampling runs; real-data s.e. ratios are medians over splits.
 
+    `rows.jsonl`/`bootstrap.jsonl` hold the with-replacement record bootstrap and `rows_half.jsonl`/`bootstrap_half.jsonl` the
+    half-sampling without replacement, which avoids duplicate records in the GACV selection; their tables get a `_half` suffix."""
+    for tag in ("", "_half"):
+        real = _rows(ROOT / "results" / "alternatives" / "bootstrap" / f"rows{tag}.jsonl")
+        if not real.empty:
+            if "error" in real:
+                real = real[real["error"].isna()]
+            real = real.assign(lam_inf_frac=np.isinf(real["lam"].astype(float)).astype(float), lam_zero_frac=(real["lam"].astype(float) == 0).astype(float))
+            if "contrast_se_rec" in real:
+                real["se_rec_over_cell_adj_med"] = [_adjacent_se_ratio(r) for _, r in real.iterrows()]
+            if "contrast_se_two" in real:
+                real["se_two_over_cell_adj_med"] = [_adjacent_se_ratio(r, "contrast_se_two") for _, r in real.iterrows()]
+            cols = [c for c in BOOT_REAL_COLS + ["lam_inf_frac", "lam_zero_frac", "se_rec_over_cell_adj_med", "se_two_over_cell_adj_med"] if c in real]
+            g = real.groupby(["dataset", "level", "method"])
+            out = g[cols].mean(numeric_only=True)
+            # s.e. ratios: median over splits, since a single near-separated split can dominate the mean
+            ratio_cols = [c for c in cols if c.startswith(("se_ratio", "se_rec", "se_two"))]
+            out[ratio_cols] = g[ratio_cols].median(numeric_only=True)
+            out["lam_boot_same_frac_med"] = g["lam_boot_same_frac"].median() if "lam_boot_same_frac" in real else np.nan
+            out["n_splits"] = g.size()
+            out.reset_index().to_csv(OUT / f"bootstrap_real{tag}.csv", index=False)
+        syn = _rows(ROOT / "results" / "alternatives" / "simulation" / "main10_record" / f"bootstrap{tag}.jsonl")
+        if not syn.empty:
+            if "error" in syn:
+                syn = syn[syn["error"].isna()]
+            syn = syn.assign(lam_inf_frac=np.isinf(syn["lam"].astype(float)).astype(float))
+            cols = [c for c in BOOT_SYN_COLS + ["lam_inf_frac"] if c in syn]
+            g = syn.groupby(["n_H", "record_sd", "method"])
+            out = g[cols].mean(numeric_only=True)
+            for c in ("cov_sand_cell", "cov_boot_pct", "cov_boot_fixed_pct", "cov_sand_rec", "cov_sand_cell_pre", "cov_sand_rec_pre", "cov_sand_two", "cov_sand_two_pre"):
+                if c in syn:
+                    out[c + "_se"] = g[c].sem()
+            out["n_seeds"] = g.size()
+            out.reset_index().to_csv(OUT / f"bootstrap_synthetic{tag}.csv", index=False)
 
 if __name__ == "__main__":
     main()

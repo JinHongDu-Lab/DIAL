@@ -34,7 +34,7 @@ import numpy as np
 
 from dial_judge.baselines import calibrate_llm_fit, fit_human_only_btl
 from dial_judge.benchmarks import fit_hja
-from dial_judge.bootstrap import coverage, resample_within_strata, summarize_contrasts
+from dial_judge.bootstrap import coverage, draw_within_strata, summarize_contrasts
 from dial_judge.data import comparisons_to_aggregated, comparisons_to_order_aggregated, pool_pairs
 from dial_judge.gacv import select_lambda
 from dial_judge.inference import human_only_uq, joint_sandwich, pairwise_contrast_matrix
@@ -144,7 +144,8 @@ def _records_of(matched, K):
 
 
 def run_cell(args):
-    cfg_name, row, n_L, n_H, record_sd, seed, B = args
+    cfg_name, row, n_L, n_H, record_sd, seed, B, *rest = args
+    scheme = rest[0] if rest else "boot"
     t0 = time.perf_counter()
     cell = simulate_cell(cfg_name, row, n_L, n_H, record_sd, seed)
     N, K, r, base, s0, matched = (cell[k] for k in ("N", "K", "r", "base", "s0", "matched"))
@@ -209,7 +210,7 @@ def run_cell(args):
             row_out.update(prespecified_error=repr(e))
         S_post, S_fixed, lams = np.full((B, N), np.nan), np.full((B, N), np.nan), np.full(B, np.nan)
         for bidx in range(B):
-            draw = resample_within_strata([np.arange(n_lab), np.arange(n_lab, len(blocks))], rng)
+            draw = draw_within_strata([np.arange(n_lab), np.arange(n_lab, len(blocks))], rng, scheme)
             llm_b = [llm[i] for t in draw for i in blocks[t]]
             hum_b = [hum[t] for t in draw if t < n_lab]
             try:
@@ -248,7 +249,7 @@ def run_cell(args):
         uq = human_only_uq(N, pairs, h["s_H"])
         S_h = np.full((B, N), np.nan)
         for bidx in range(B):
-            draw = rng.choice(n_lab, size=n_lab, replace=True)
+            draw = rng.choice(n_lab, size=n_lab, replace=True) if scheme == "boot" else rng.choice(n_lab, size=n_lab // 2, replace=False)
             try:
                 S_h[bidx] = fit_human_only_btl(N, pool_pairs([hum[t] for t in draw]))["s_H"]
             except Exception:  # noqa: BLE001
@@ -286,13 +287,14 @@ def main():
     p.add_argument("--B", type=int, default=100)
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--out", default=None)
+    p.add_argument("--scheme", choices=("boot", "half"), default="boot", help="record bootstrap or half-sampling without replacement")
     a = p.parse_args()
     from experiments.simulation.synthetic import cells_for
     s0, s1 = (int(x) for x in a.seeds.split(":"))
     out = Path(a.out or f"results/alternatives/simulation/{a.config}/bootstrap.jsonl")
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)
-    jobs = [(a.config, "record", nL, nH, sd, s, a.B) for (nL, nH, sd) in cells_for(a.config, "record") for s in range(s0, s1) if (nL, nH, sd, s) not in done]
+    jobs = [(a.config, "record", nL, nH, sd, s, a.B, a.scheme) for (nL, nH, sd) in cells_for(a.config, "record") for s in range(s0, s1) if (nL, nH, sd, s) not in done]
     print(f"{len(jobs)} cells to run ({len(done)} stored) -> {out}", flush=True)
     t0 = time.perf_counter()
     with ProcessPoolExecutor(max_workers=a.workers) as ex, open(out, "a") as f:
