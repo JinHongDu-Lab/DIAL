@@ -63,6 +63,66 @@ Rows go to `results/real_robustness/<dataset>/rows.jsonl` and `results/intermedi
 `notebooks/3_real_data_calibration.ipynb` the human-calibration figures. Runs resume: cells already
 in the output are skipped, and `--methods` adds methods to existing cells.
 
+## Alternative estimators and further designs
+
+`real_data/alternative_estimators.py` and the `--addon` pass of `simulation/synthetic.py`; rows go
+to `results/alternatives/`, and `python -m experiments.alternatives_summary` writes the tables
+(`results/alternatives/summary/`) and the matched-design and orthogonal-misalignment figures.
+
+| Key | Name | Definition |
+|---|---|---|
+| `ppi_bt_best` | PPI++ (best judge) | Bradley--Terry PPI++; proxy = the judge agreeing most with the cell's calibration labels |
+| `ppi_bt_panel` | PPI++ (panel) | the same with the panel majority verdict as proxy |
+| `ridge_mu` | Joint-l2 | human BTL + kappa ||P s||^2 shrinking toward span(mu_hat), kappa by approximate leave-one-out |
+| `human_box` | Human (box) | unpenalized human BTL on DIAL's coordinate box |
+| `human_ridge` | Human (ridge) | ridge toward zero, kappa by approximate leave-one-out |
+| `human_firth` | Human (Firth) | Firth-penalized human BTL |
+| `atc_ridge`, `atc_firth` | AtC (ridge / Firth) | AtC with the stage-1 ordering from the penalized fit |
+| `llm_only` | LLM-only consensus | mu_hat alone (zero human budget; ranking metrics only) |
+
+PPI++ is run as defined (no penalty, box, or imputation) and needs a proxy verdict on every
+human-labeled record; its rows record `ppi_status` (ok / partial / failed) and the matched counts.
+
+```bash
+ALT=ppi_bt_best,ppi_bt_panel,ridge_mu,human_box,human_ridge,human_firth,atc_ridge,atc_firth
+
+# human-budget sweep (n_H = 0 and 3200 on Arena included) and the intermediate LLM budget
+python run_real_data.py robustness --sweep budget --panels all --methods $ALT --seeds 0:50 --workers 8 --out results/alternatives/budget
+python run_real_data.py robustness --sweep budget_full --panels all --seeds 0:50 --workers 8 --out results/alternatives/budget
+python run_real_data.py intermediate --seeds 50 --workers 8 --tag alternatives --methods $ALT --out results/alternatives/intermediate_budget
+
+# matched-pair design: n_H labeled records with every judge's verdicts, plus proxy-only records
+python run_real_data.py robustness --sweep matched --seeds 0:50 --workers 8 --out results/alternatives/matched \
+    --methods human_only,consensus_cal,dial_mu,atc_btl,ppi_bt_best,ppi_bt_panel,ridge_mu,human_firth
+python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6
+python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6 --addon
+python run_simulation.py --config main10 --row nH --seeds 0:50 --workers 6 --addon
+
+# orthogonal misalignment: s_H = mu + rho ||mu|| u / ||u||, u orthogonal to {1, mu, V}
+python run_simulation.py --config main10_orth --row orth --seeds 0:50 --workers 6
+python run_simulation.py --config main10_orth --row orth --seeds 0:50 --workers 6 --addon
+
+# rank sensitivity (likewise --llm-rank 2 into .../r2), then the summary and the BIC choice of r
+python run_real_data.py robustness --sweep budget --seeds 0:50 --workers 8 --llm-rank 0 \
+    --methods consensus_cal,dial_mu,dial_w --out results/real_robustness_rank/r0
+python -m experiments.real_data.rank_sensitivity
+```
+
+## Resampling checks of the intervals
+
+`simulation/record_bootstrap.py` (config `main10_record`: matched design with a record effect
+shared by the judges and the human label) and `real_data/record_bootstrap.py` refit DIAL, GACV
+selection included, on resampled records and compare with the sandwich intervals. `--scheme half`
+draws half of the records of each stratum without replacement instead of a bootstrap sample.
+
+```bash
+python -m experiments.simulation.record_bootstrap --config main10_record --seeds 0:50 --B 200 --workers 5
+python -m experiments.real_data.record_bootstrap --datasets arena_33k,mt_bench --levels 200,800 --seeds 0:10 --B 200 --workers 4
+python -m experiments.real_data.twoway_check --workers 8                 # record, judge-pair, and two-way sandwiches
+python -m experiments.real_data.selection_bootstrap_check --workers 16   # resampling scheme and the GACV selection
+python -m experiments.simulation.record_scale_check --workers 16         # sandwich coverage at larger budgets
+```
+
 ## Motivation figure
 
 `real_data/motivation.py`; Figure 1(b) in `notebooks/0_motivation.ipynb`. Model-free: every
