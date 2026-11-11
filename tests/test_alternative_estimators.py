@@ -59,7 +59,6 @@ def test_ppi_lambda_small_for_useless_proxy(truth):
     i, j, y, _ = _records(s, 400, rng)
     f = rng.binomial(1, 0.5, size=i.size).astype(float)          # proxy unrelated to the outcome
     ui, uj, _, _ = _records(s, 3000, rng)
-    uf = rng.binomial(1, 0.5, size=ui.size).astype(float)
     lam, _ = ppi_lambda(6, np.zeros(6), i, j, y, f, ui, uj)
     assert lam < 0.2
 

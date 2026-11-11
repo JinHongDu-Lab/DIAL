@@ -38,7 +38,6 @@ from .hja import (
     chart_bounds,
     count_at_bound,
     count_chart_at_bound,
-    position_bounds,
     projected_gradient,
 )
 

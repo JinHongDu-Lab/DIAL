@@ -36,7 +36,7 @@ The data are also on the Hugging Face Hub as
 | Position-debiasing figures | `python run_real_data.py robustness --sweep all --seeds 0:50` and `--clean-fit` | `notebooks/2_real_data_position.ipynb` |
 | Human-calibration figures | the robustness run above and `python run_real_data.py intermediate --seeds 50` | `notebooks/3_real_data_calibration.ipynb` |
 | Dataset tables | `python run_real_data.py tables` | printed |
-| Alternative estimators, matched designs, resampling checks, rank sensitivity | see [experiments/README.md](experiments/README.md) | `python -m experiments.alternatives_summary` |
+| Alternative estimators, matched designs, resampling checks, rank sensitivity | see [experiments/README.md](experiments/README.md) | `python run_real_data.py summary` |
 
 Exact commands, the method panel, and runtimes are in [experiments/README.md](experiments/README.md).
 Results are written under `results/`; the notebooks save figures to `figures/`.

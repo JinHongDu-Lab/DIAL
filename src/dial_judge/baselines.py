@@ -97,12 +97,6 @@ def _calibrated_result(method, hja_fit, human_pairs, consensus_only=False, maxit
     }
 
 
-def fit_llm_consensus(N, K, r, n_ijk, y_ijk, **fit_kwargs):
-    """Fit the LLM panel and expose its centered consensus as the target score."""
-    fit = fit_hja(N, K, r, n_ijk=n_ijk, y_ijk=y_ijk, **fit_kwargs)
-    return {**fit, "method": "llm_consensus", "s_H": np.asarray(fit["mu"], dtype=float)}
-
-
 def fit_consensus_only_calibrated(
     N,
     K,

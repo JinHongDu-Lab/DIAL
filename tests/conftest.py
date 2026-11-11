@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 from dial_judge.data import (

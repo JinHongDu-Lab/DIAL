@@ -1,27 +1,104 @@
-"""Judge panels across budget regimes: the data behind the calibration figures.
+"""Aggregation of the real-data results; the figures are drawn in the notebooks.
 
-Appendix grids (datasets x judge panels), read from the robustness rows:
+`load` / `aggregate` / `aggregate_spectest`: per (sweep, panel, kind, level, n_H_level, method)
+mean and Monte Carlo s.e. of the held-out metrics, the paired difference to human-only on the same
+split, endpoint shares of the selected weight, selected rank, and failure counts
+(notebooks/2_real_data_position.ipynb).
 
-  fig_panel_human_budget.pdf      human budget n_H sweep, as-collected LLM data
-  fig_panel_llm_budget.pdf        LLM budget n_L sweep at a fixed n_H (300 / 80 / 60)
+`panel_budget_data`, `intermediate_data`, `calibration_rows`, ...: the rows behind the
+human-calibration figures (notebooks/3_real_data_calibration.ipynb): the human-budget and
+LLM-budget grids over datasets and judge panels, and the main-text calibration figure, which draws
+the Arena `all` cells of the human-budget sweep and of the intermediate-LLM-budget run on one
+Kendall-tau axis.
 
-The main-text calibration figure draws the Arena `all` cells of the human-budget sweep and of the
-`intermediate_budget` run (fixed n_L = 2000) on one Kendall-tau axis.
+`dataset_stats`: the dataset-statistics table after preprocessing.
 
-This module only loads and aggregates per-cell means with their Monte Carlo s.e.; the figures are
-drawn in `notebooks/3_real_data_calibration.ipynb`.
+    python -m experiments.real_data.aggregate    # results/real_robustness/<dataset>/summary.csv
 """
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
-from .robustness_plot import load
-
 ROOT = Path(__file__).resolve().parents[2]
+DATASET_LABEL = {"arena_33k": "Chatbot Arena", "mt_bench": "MT-Bench", "pandalm": "PandaLM"}
 
+KEY = ["sweep", "panel", "kind", "level", "n_H_level"]
+METRICS = ["excess", "logloss", "acc", "ref_kendall", "b_mean_abs", "b_inj_mean_abs", "gamma_inj_mean_abs", "lam_rel", "r_sel", "first_share", "n_L", "n_H"]
+MAIN_METHODS = ["human_only", "pooled_cal", "consensus_cal", "dial_mu", "dial_nodeb"]
+
+
+def load(dataset, base=".", results="real_robustness"):
+    """Rows of one dataset under results/<results>/; `results` names the run directory, e.g.
+    `alternatives/budget` for the alternative estimators."""
+    path = Path(base) / "results" / results / dataset / "rows.jsonl"
+    with open(path) as handle:
+        df = pd.DataFrame([json.loads(line) for line in handle])
+    for old, new in (("n_0", "n_H"), ("n_0_level", "n_H_level")):  # pre-rename rows.jsonl; coalesce if both schemas are present
+        if old in df.columns:
+            df[new] = df[new].combine_first(df[old]) if new in df.columns else df[old]
+            df = df.drop(columns=old)
+    for c in METRICS + ["error", "converged", "lam", "human_only_exists", "n_H_level", "n_at_bound", "b_at_bound", "K_dropped"]:
+        if c not in df:
+            df[c] = np.nan
+    df["n_H_level"] = df["n_H_level"].fillna(-1).astype(int)
+    if "all_dropped" not in df:
+        df["all_dropped"] = False
+    df["all_dropped"] = df["all_dropped"].fillna(False).astype(bool)
+    # a replication in which every GACV candidate failed a guard has no admissible fit, so it is
+    # reported as failed and excluded from the aggregated means (it is counted in `n_failed`)
+    df["failed"] = df["error"].notna() | df["all_dropped"]
+    df["lam_rel"] = df["lam_rel"].replace([np.inf, -np.inf], np.nan)
+    for sw in ("noise", "noise_scarce"):
+        noise0 = df[(df.sweep == sw) & (df.level == 0)]
+        if not noise0.empty:
+            kinds = sorted(set(df.loc[df.sweep == sw, "kind"]) - set(noise0["kind"]))
+            df = pd.concat([df] + [noise0.assign(kind=k) for k in kinds], ignore_index=True)
+    return df
+
+
+def _se(x):
+    x = x.dropna()
+    return x.std(ddof=1) / np.sqrt(len(x)) if len(x) > 1 else np.nan
+
+
+def aggregate(df):
+    df = df[~df.method.isin(["spectest", "planner"])]   # "planner": a retired method in older rows.jsonl files
+    ok = df[~df.failed]
+    g = ok.groupby(KEY + ["method"])
+    agg = g.agg(n=("seed", "size"), K=("K", "first"), n_test=("n_test", "first"), floor=("floor", "mean"),
+                **{f"{m}_mean": (m, "mean") for m in METRICS}, **{f"{m}_se": (m, _se) for m in METRICS},
+                lam_rel_med=("lam_rel", "median"),
+                lam_inf_frac=("lam", lambda x: float(np.mean(np.isinf(x.astype(float))))),
+                lam_zero_frac=("lam", lambda x: float(np.mean(x.astype(float) == 0))),
+                nonconv_frac=("converged", lambda x: float(np.mean(~x.fillna(True).astype(bool)))),
+                sep_frac=("n_at_bound", lambda x: float(np.mean(x.fillna(0).astype(float) > 0))),      # fit touched the finite-fit box (a separated judge)
+                bsep_frac=("b_at_bound", lambda x: float(np.mean(x.fillna(0).astype(float) > 0))),    # a position effect at the bound
+                k_dropped_mean=("K_dropped", lambda x: float(np.nanmean(x.astype(float))) if x.notna().any() else 0.0),
+                ho_exists_frac=("human_only_exists", lambda x: float(np.mean(x.fillna(True).astype(bool))))).reset_index()
+    ho = ok[ok.method == "human_only"][KEY + ["seed", "excess"]].rename(columns={"excess": "ex_ho"})
+    paired = ok.merge(ho, on=KEY + ["seed"], how="inner")
+    paired["d_excess"] = paired["excess"] - paired["ex_ho"]
+    pd_agg = paired.groupby(KEY + ["method"]).agg(d_excess_mean=("d_excess", "mean"), d_excess_se=("d_excess", _se)).reset_index()
+    agg = agg.merge(pd_agg, on=KEY + ["method"], how="left")
+    failed = df[df.failed].groupby(KEY + ["method"]).size().rename("n_failed").reset_index()
+    return agg.merge(failed, on=KEY + ["method"], how="left").fillna({"n_failed": 0})
+
+
+def aggregate_spectest(df):
+    s = df[df.method == "spectest"]
+    if s.empty:
+        return s
+    return s.groupby(["kind", "level"]).agg(n=("seed", "size"), reject_rate=("reject05", "mean"), stat_mean=("stat", "mean"), df=("df", "first"),
+                                            ho_exists=("human_only_exists", "mean"), excess_restricted=("excess_restricted", "mean"), excess_full=("excess_full", "mean"),
+                                            tau_mu=("tau_mu_vs_test_human", "mean"), n_H=("n_H", "first")).reset_index()
+
+
+# --------------------------------------------------------------------------- judge panels across budget regimes
 PANELS = ['small6', 'large6', 'all']
 NH = {'arena_33k': 300, 'mt_bench': 80, 'pandalm': 60}          # human budget held fixed in the LLM sweep
 INTERMEDIATE_NL = {'arena_33k': 2000, 'mt_bench': 160, 'pandalm': 100}
@@ -32,7 +109,6 @@ METHOD_KEYS = ['human_only', 'consensus_cal', 'dial_mu']
 SEEDS = 50
 
 
-# --------------------------------------------------------------------------- data
 def panel_budget_data():
     """Rows behind the human- and LLM-budget figures, as means with their Monte Carlo s.e.
 
@@ -56,7 +132,7 @@ def panel_budget_data():
     keys = ['dataset', 'sweep', 'panel', 'level', 'n_H_level', 'method']
     assert not data.duplicated(keys + ['seed']).any()
     assert data.groupby(keys).seed.apply(lambda x: set(x) == set(range(SEEDS))).all()
-    # replications with no admissible GACV candidate carry no usable score (robustness_plot.load)
+    # replications with no admissible GACV candidate carry no usable score (`load`)
     data = data[~data.failed]
     return data.groupby(keys).agg(excess=('excess', 'mean'), se=('excess', 'sem'),
                                   tau=('ref_kendall', 'mean'), tau_se=('ref_kendall', 'sem'),
@@ -88,7 +164,7 @@ def intermediate_data(root=None):
     """Rows behind the intermediate-LLM-budget figure, with the run's own completeness checks."""
     root = Path(ROOT / 'results' / 'intermediate_budget' if root is None else root)
     x = pd.read_csv(root / 'rows.csv')
-    x = x[x.method.isin(METHOD_KEYS)].copy()          # the run also stores endpoint-margin variants
+    x = x[x.method.isin(METHOD_KEYS)].copy()          # the directory may hold other methods' passes
     if 'all_dropped' in x:                            # no admissible GACV candidate: no usable score
         dropped = x['all_dropped'].fillna(False).astype(bool)
         x = x[~dropped]
@@ -227,3 +303,76 @@ def calibration_rows(summary, intermediate, ds=CALIBRATION_DATASET, panel=CALIBR
     alt = [alternative_rows(ds=ds, panel=panel), alternative_intermediate_rows(ds=ds, panel=panel)]
     return [pd.concat([summary[summary.sweep == 'budget'], atc[0], alt[0]], ignore_index=True),
             pd.concat([intermediate, atc[1], alt[1]], ignore_index=True)]
+
+
+# --------------------------------------------------------------------------- dataset tables
+def dataset_stats(dataset, cfg=None):
+    """One column of the dataset-statistics table; judges are kept as in the real-data study."""
+    from .prepare import load_canonical
+    from .robustness import build_panel, load_config
+    s = (cfg or load_config())["study"]
+    frame = load_canonical(dataset)
+    panel = build_panel(frame, exclude=s["exclude_judges"], tie_rate_exclude=s["tie_rate_exclude"],
+                        min_coverage=s["min_coverage"], llm_ties=s["llm_ties"], human_ties=s["human_ties"])
+    N, K, llm = panel["N"], panel["K"], panel["llm"]
+    records = frame.drop_duplicates("record_id")
+    labels = records["human_label"].value_counts()
+    n_pairs = N * (N - 1) // 2
+    cells = llm.groupby(["k", "i", "j"]).size()
+    kept = frame[frame["judge"].isin(panel["judges"])]
+    tie_rate = kept.groupby("judge")["judge_tie"].mean()
+    return {
+        "records": panel["n_records"],
+        "N": N,
+        "K": K,
+        "observed pairs": f"{records.groupby(['item_i', 'item_j']).ngroups} / {n_pairs}",
+        "human a / b / tie / both bad": " / ".join(str(int(labels.get(x, 0))) for x in ("model_a", "model_b", "tie", "both_bad")),
+        "decisive human labels": panel["n_human_decisive"],
+        "LLM judgments, kept judges": panel["n_llm_rows"],
+        "of which ties": f"{panel['n_llm_ties']} ({panel['n_llm_ties'] / panel['n_llm_rows']:.1%})",
+        "tie-excluded n_L": len(llm),
+        "display order +1 / -1": f"{(llm.a == 1).sum()} / {(llm.a == -1).sum()}",
+        "cells observed / possible": f"{len(cells)} / {K * n_pairs}",
+        "n_kij per cell (min / mean / max)": f"{cells.min()} / {cells.mean():.1f} / {cells.max()}",
+        "judge tie rate (min-max)": f"{tie_rate.min():.3f}-{tie_rate.max():.3f}",
+        "candidate models": ", ".join(panel["items"]),
+    }
+
+
+def print_dataset_tables():
+    """Print the dataset statistics and the candidate models of the three benchmarks."""
+    table = pd.DataFrame({label: dataset_stats(d) for d, label in DATASET_LABEL.items()})
+    with pd.option_context("display.max_colwidth", 200, "display.width", 250):
+        print(table.drop("candidate models").to_string())
+        for label, items in table.loc["candidate models"].items():
+            print(f"\n{label}: {items}")
+
+
+# --------------------------------------------------------------------------- summary tables
+def main(argv=None):
+    p = argparse.ArgumentParser()
+    p.add_argument("--dataset", default="all")
+    a = p.parse_args(argv)
+    pd.set_option("display.width", 300)
+    pd.set_option("display.max_columns", 40)
+    pd.set_option("display.max_rows", 800)
+    datasets = ("arena_33k", "mt_bench", "pandalm") if a.dataset == "all" else (a.dataset,)
+    for d in datasets:
+        path = ROOT / "results" / "real_robustness" / d / "rows.jsonl"
+        if not path.exists():
+            continue
+        df = load(d, ROOT)
+        agg = aggregate(df)
+        agg.to_csv(path.parent / "summary.csv", index=False)
+        print(f"=== {d}")
+        for (sw, pn, kd), g in agg.groupby(["sweep", "panel", "kind"]):
+            piv = g.pivot_table(index=["level", "n_H_level"], columns="method", values="excess_mean").reindex(columns=MAIN_METHODS + ["dial_mle_mu", "oracle_test"])
+            print(f"--- {sw} | panel={pn} | kind={kd}   excess held-out log loss (mean over seeds)")
+            print(piv.round(4).to_string())
+        st = aggregate_spectest(df)
+        if not st.empty:
+            print("--- spectest"); print(st.round(3).to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

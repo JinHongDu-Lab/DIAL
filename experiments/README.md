@@ -1,7 +1,23 @@
 # Experiments
 
-Study modules write per-replication rows to `results/`; the notebooks aggregate them and draw every
-figure. Run commands from the repository root.
+Study modules write per-replication rows to `results/`; the notebooks aggregate them and draw the
+figures. Run commands from the repository root; `run_real_data.py` and `run_simulation.py` are the
+only entry points.
+
+```text
+style.py                           method panel: names, order, colours
+summary.py                         tables of the comparisons and checks, two synthetic figures
+simulation/synthetic.py            synthetic study (all configurations)
+simulation/record_bootstrap.py     resampling checks of the intervals, synthetic
+simulation/aggregate.py            per-cell summaries for notebooks/1_simulation.ipynb
+real_data/prepare.py               judge responses -> analysis table
+real_data/motivation.py            descriptive position-bias and alignment summaries
+real_data/robustness.py            real-data study (all sweeps)
+real_data/alternative_estimators.py   PPI++, Joint-l2, regularized Human and AtC fits of a cell
+real_data/intermediate_budget.py   human-budget sweep at a fixed intermediate LLM budget
+real_data/record_bootstrap.py      resampling checks of the intervals, real data
+real_data/aggregate.py             per-cell summaries for notebooks 2 and 3, dataset tables
+```
 
 ## Method panel
 
@@ -58,7 +74,7 @@ python run_real_data.py tables                                               # d
 ```
 
 Rows go to `results/real_robustness/<dataset>/rows.jsonl` and `results/intermediate_budget/`.
-`robustness_plot.py` and `panel_budget.py` aggregate them;
+`real_data/aggregate.py` aggregates them;
 `notebooks/2_real_data_position.ipynb` draws the position-debiasing figures and
 `notebooks/3_real_data_calibration.ipynb` the human-calibration figures. Runs resume: cells already
 in the output are skipped, and `--methods` adds methods to existing cells.
@@ -66,8 +82,8 @@ in the output are skipped, and `--methods` adds methods to existing cells.
 ## Alternative estimators and further designs
 
 `real_data/alternative_estimators.py` and the `--addon` pass of `simulation/synthetic.py`; rows go
-to `results/alternatives/`, and `python -m experiments.alternatives_summary` writes the tables
-(`results/alternatives/summary/`) and the matched-design and orthogonal-misalignment figures.
+to `results/alternatives/`, and `python run_real_data.py summary` (`experiments/summary.py`) writes
+the tables (`results/alternatives/summary/`) and the matched-design and orthogonal-misalignment figures.
 
 | Key | Name | Definition |
 |---|---|---|
@@ -91,7 +107,7 @@ python run_real_data.py robustness --sweep budget --panels all --methods $ALT --
 python run_real_data.py robustness --sweep budget_full --panels all --seeds 0:50 --workers 8 --out results/alternatives/budget
 python run_real_data.py intermediate --seeds 50 --workers 8 --tag alternatives --methods $ALT --out results/alternatives/intermediate_budget
 
-# matched-pair design: n_H labeled records with every judge's verdicts, plus proxy-only records
+# matched-pair design: n_H labeled records with every judge's verdicts, plus LLM-only records
 python run_real_data.py robustness --sweep matched --seeds 0:50 --workers 8 --out results/alternatives/matched \
     --methods human_only,consensus_cal,dial_mu,atc_btl,ppi_bt_best,ppi_bt_panel,ridge_mu,human_firth
 python run_simulation.py --config main10_matched --row nH --seeds 0:50 --workers 6
@@ -102,10 +118,12 @@ python run_simulation.py --config main10 --row nH --seeds 0:50 --workers 6 --add
 python run_simulation.py --config main10_orth --row orth --seeds 0:50 --workers 6
 python run_simulation.py --config main10_orth --row orth --seeds 0:50 --workers 6 --addon
 
-# rank sensitivity (likewise --llm-rank 2 into .../r2), then the summary and the BIC choice of r
+# rank sensitivity (likewise --llm-rank 2 into .../r2)
 python run_real_data.py robustness --sweep budget --seeds 0:50 --workers 8 --llm-rank 0 \
     --methods consensus_cal,dial_mu,dial_w --out results/real_robustness_rank/r0
-python -m experiments.real_data.rank_sensitivity
+
+# tables of all of the above, the resampling checks below, and the BIC choice of the rank
+python run_real_data.py summary
 ```
 
 ## Resampling checks of the intervals
@@ -113,14 +131,15 @@ python -m experiments.real_data.rank_sensitivity
 `simulation/record_bootstrap.py` (config `main10_record`: matched design with a record effect
 shared by the judges and the human label) and `real_data/record_bootstrap.py` refit DIAL, GACV
 selection included, on resampled records and compare with the sandwich intervals. `--scheme half`
-draws half of the records of each stratum without replacement instead of a bootstrap sample.
+draws half of the records of each stratum without replacement instead of a bootstrap sample
+(written next to the bootstrap rows with a `_half` suffix).
 
 ```bash
-python -m experiments.simulation.record_bootstrap --config main10_record --seeds 0:50 --B 200 --workers 5
-python -m experiments.real_data.record_bootstrap --datasets arena_33k,mt_bench --levels 200,800 --seeds 0:10 --B 200 --workers 4
-python -m experiments.real_data.twoway_check --workers 8                 # record, judge-pair, and two-way sandwiches
-python -m experiments.real_data.selection_bootstrap_check --workers 16   # resampling scheme and the GACV selection
-python -m experiments.simulation.record_scale_check --workers 16         # sandwich coverage at larger budgets
+python run_simulation.py bootstrap --config main10_record --seeds 0:50 --B 200 --workers 5 [--scheme half]
+python run_real_data.py bootstrap --datasets arena_33k,mt_bench --levels 200,800 --seeds 0:10 --B 200 --workers 4 [--scheme half]
+python run_real_data.py bootstrap --check twoway --workers 8        # record, judge-pair, and two-way sandwiches
+python run_real_data.py bootstrap --check selection --workers 16    # resampling scheme and the GACV selection
+python run_simulation.py bootstrap --scale-check --workers 16       # sandwich coverage at larger budgets
 ```
 
 ## Motivation figure

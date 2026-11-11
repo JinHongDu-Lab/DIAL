@@ -22,7 +22,7 @@ stage-matched external comparison of AtC: the same human comparisons aggregated 
 isotonic projection of the LLM-only position-debiased consensus onto that ordering.
 
 Rows append to results/real_robustness/<dataset>/rows.jsonl keyed by
-(sweep, panel, kind, level, n_H, seed). Aggregation: robustness_plot.py and panel_budget.py;
+(sweep, panel, kind, level, n_H, seed). Aggregation: aggregate.py;
 figures: notebooks/2_real_data_position.ipynb and notebooks/3_real_data_calibration.ipynb.
 """
 from __future__ import annotations
@@ -198,13 +198,6 @@ def inject_noise_judges(llm, K, m, kind, rng, first_prob=0.9):
             y = np.where(base["a"].to_numpy() == 1, first, ~first).astype(float)
         parts.append(base.assign(k=k, y=y))
     return pd.concat(parts, ignore_index=True), K + m
-
-
-def amplify_bias(llm, theta, rng):
-    if theta <= 0:
-        return llm
-    hit = rng.random(len(llm)) < theta
-    return llm.assign(y=np.where(hit, (llm["a"].to_numpy() == 1).astype(float), llm["y"].to_numpy()))
 
 
 def draw_budget(human, n_H, rng):
@@ -546,14 +539,6 @@ def run_cell(job):
             lam = float(sel["lam"])
             selected_regular = next(p["regular"] for p in sel["gacv_path"] if p["lam"] == lam)
             rec("dial_mu", sel["s_H"], **lam_fields(lam), gacv=float(sel["gacv"]), selected_regular=bool(selected_regular), n_dropped=len(sel["dropped"]), **flags(sel), **(inj(sel) if lam > 0 else {}))
-            if cfg.get("_gacv_endpoint_margins"):
-                from .endpoint_margin import choose_endpoint_margin
-                candidates = dict(sel["candidates"])
-                for margin in cfg["_gacv_endpoint_margins"]:
-                    chosen, reason, gap = choose_endpoint_margin(sel["gacv_path"], n_H_actual, margin, fallback=lam)
-                    fitted = candidates[chosen]
-                    point = next(p for p in sel["gacv_path"] if p["lam"] == chosen)
-                    rec(f"dial_margin_{margin:g}", fitted["s_H"], **lam_fields(chosen), margin_c=margin, margin_reason=reason, endpoint_gacv_gap=gap, gacv=float(point["gacv"]), selected_regular=bool(point["regular"]), n_dropped=len(sel["dropped"]), **flags(fitted))
             if want("oracle_test"):
                 losses = [(l, heldout_log_loss(f["s_H"], test_recs), f) for l, f in sel["candidates"]]
                 lam_o, _, f_o = min(losses, key=lambda x: x[1])
@@ -771,10 +756,6 @@ def main(argv=None):
         for h in handles.values():
             h.close()
     print("done", flush=True)
-
-
-def describe(dataset):
-    return {"study": "robustness", "dataset": dataset, "sweeps": list(SWEEPS), "methods": list(METHODS), "evaluation": "held_out_human_comparisons", "status": "implemented"}
 
 
 if __name__ == "__main__":

@@ -1,50 +1,29 @@
-"""
-DIAL: Debiasing and human-preference Informed Alignment for LLM judges.
+"""DIAL: position-debiased LLM judges with adaptive human-preference calibration.
 
-  - HJA (hja.py): S = gamma*mu^T + U V^T, optionally with position-effect BTL
-    logit(p_kij^(a)) = S_ki - S_kj + a * b_k
-  - DIAL (dial_model.py): weighted joint estimator
-    ell_H(c; W) + lambda * ell_L(theta)
-  - GACV (gacv.py): selects lambda from human comparisons
-
-Metrics in evaluate.py: MSE, Spearman, NDCG, Coverage, Sign accuracy (human).
+  hja.py         structured LLM-panel model S = gamma mu^T + U V^T with the order-effect BTL
+                 logit(p_kij^(a)) = S_ki - S_kj + a b_k
+  dial_model.py  weighted joint estimator ell_H(c; W) + lambda ell_L(theta)
+  gacv.py        selection of lambda from the human comparisons
+  inference.py   sandwich and cluster-robust intervals, calibration-space test
+  baselines.py, penalized.py, ppi.py   comparison estimators
 """
-from .benchmarks import fit_hja, fit_dial, fit_dial_joint, fit_dial_gacv, fit_ht_hja_joint
 from .baselines import (
     fit_atc_btl,
     fit_consensus_only_calibrated,
     fit_human_only_btl,
-    fit_llm_consensus,
     fit_pooled_btl,
     fit_staged_structured_calibration,
 )
-from .evaluate import (
-    evaluate_scores,
-    score_recovery_mse,
-    spearman,
-    ndcg,
-    interval_coverage,
-    sign_accuracy,
-    human_sign_accuracy,
-)
+from .benchmarks import fit_dial, fit_hja
+from .gacv import select_lambda
 
 __all__ = [
     "fit_hja",
     "fit_dial",
-    "fit_dial_joint",
-    "fit_dial_gacv",
-    "fit_ht_hja_joint",
+    "select_lambda",
     "fit_atc_btl",
     "fit_consensus_only_calibrated",
     "fit_human_only_btl",
-    "fit_llm_consensus",
     "fit_pooled_btl",
     "fit_staged_structured_calibration",
-    "evaluate_scores",
-    "score_recovery_mse",
-    "spearman",
-    "ndcg",
-    "interval_coverage",
-    "sign_accuracy",
-    "human_sign_accuracy",
 ]

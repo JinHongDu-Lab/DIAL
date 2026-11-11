@@ -21,7 +21,7 @@ import numpy as np
 from scipy.special import expit
 from scipy.stats import norm
 
-from .dial_model import human_nll_and_grad, pairs_to_arrays, total_llm_n
+from .dial_model import pairs_to_arrays, total_llm_n
 from .hja import negative_log_likelihood_and_grad
 from .gacv import (
     hessian_from_grad,
@@ -288,7 +288,6 @@ def _target_jacobian(zeta, N, K, r, judge_basis, item_basis, use_order, eps=1e-6
         S = np.outer(gamma, mu) + (U @ V.T if r > 0 else 0.0)
         return np.concatenate([s, S.ravel(), b])
 
-    base = targets(zeta)
     steps = eps * np.eye(zeta.size)
     plus = np.column_stack([targets(zeta + e) for e in steps])
     minus = np.column_stack([targets(zeta - e) for e in steps])

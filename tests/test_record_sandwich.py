@@ -114,7 +114,6 @@ def test_singleton_records_give_the_independent_meat(cell):
 
 def test_cell_records_give_the_cell_clustered_meat(cell):
     c = cell
-    N = c["N"]
     o = c["llm_obs"]
     llm_obs = dict(o, rec=np.array([f"L{k}_{i}_{j}" for k, i, j in zip(o["k"], o["i"], o["j"])]))
     human_obs = dict(c["human_obs"], rec=np.array([f"H{t}" for t in range(c["human_obs"]["i"].size)]))

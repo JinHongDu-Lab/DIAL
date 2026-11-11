@@ -1,15 +1,11 @@
-"""
-Unified fit_* interface.
+"""Unified fit interface.
 
-Methods:
-  - fit_hja: LLM-panel HJA, optionally with position-effect BTL
-  - fit_dial / fit_dial_joint: DIAL weighted joint estimator
-  - fit_dial_gacv: same estimator with GACV-selected lambda
+  fit_hja   structured LLM-panel model S = gamma mu^T + U V^T, optionally with judge-specific order effects
+  fit_dial  DIAL weighted joint estimator at a fixed weight (see gacv.select_lambda for the selected weight)
 """
 import numpy as np
 
 from .dial_model import joint as _joint
-from .gacv import select_lambda as _select_lambda
 from .hja import collapse_order_counts, estimate_parameters, uncertainty_quantification
 
 
@@ -87,7 +83,7 @@ def fit_dial(
     """DIAL joint estimator: ell_H + lambda ell_L, with optional position effects.
 
     `lam=None` uses n_L / n_H (ordinary joint likelihood). For GACV selection
-    of lambda use fit_dial_gacv.
+    of lambda use `gacv.select_lambda`.
     """
     return _joint(
         N, K, r, human_pairs,
@@ -96,37 +92,3 @@ def fit_dial(
         lam=lam, max_steps=max_steps, tol=tol, tau=tau, inner_maxiter=inner_maxiter,
         with_uq=with_uq, uq_alpha=uq_alpha, init_params=init_params, align=align,
     )
-
-
-def fit_dial_gacv(
-    N,
-    K,
-    r,
-    n_ijk_llm,
-    y_ijk_llm,
-    human_pairs,
-    n_order=None,
-    y_order=None,
-    human_records=None,
-    lambda_grid=None,
-    max_steps=30,
-    tol=1e-6,
-    tau=1.0,
-    inner_maxiter=100,
-    with_uq=False,
-    uq_alpha=0.05,
-    align="W",
-):
-    """DIAL joint estimator with GACV-selected lambda."""
-    return _select_lambda(
-        N, K, r, human_pairs,
-        n_ijk_llm=n_ijk_llm, y_ijk_llm=y_ijk_llm,
-        n_order=n_order, y_order=y_order,
-        human_records=human_records, lambda_grid=lambda_grid,
-        max_steps=max_steps, tol=tol, tau=tau, inner_maxiter=inner_maxiter,
-        with_uq=with_uq, uq_alpha=uq_alpha, align=align,
-    )
-
-
-fit_dial_joint = fit_dial
-fit_ht_hja_joint = fit_dial

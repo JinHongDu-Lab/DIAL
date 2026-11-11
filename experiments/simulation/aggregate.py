@@ -1,9 +1,10 @@
-"""Aggregate results/simulation/<config>/rows.jsonl into per-cell summaries (mean, MC s.e., selection rates).
+"""Aggregate results/simulation/<config>/rows.jsonl into per-cell summaries (mean, Monte Carlo s.e., selection rates).
 
-Aggregation is over all stored seeds (append more with synthetic.py). Cells whose staged or
-joint fit is flagged non-convergent are excluded and counted. The budget figures are drawn in
-notebooks/1_simulation.ipynb, which imports `load` and `aggregate` from here and draws every
-figure of this study itself -- no figure code lives in this module.
+Aggregation is over all stored seeds. Cells whose staged or joint fit is flagged non-convergent are
+excluded and counted. The figures are drawn in notebooks/1_simulation.ipynb from `load` and
+`aggregate`.
+
+    python -m experiments.simulation.aggregate --config main10    # results/simulation/main10/summary.csv
 """
 from __future__ import annotations
 

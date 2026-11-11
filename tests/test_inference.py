@@ -7,7 +7,6 @@ from dial_judge.data import comparisons_to_aggregated, comparisons_to_order_aggr
 from dial_judge.gacv import make_centering_basis, pack_reduced
 from dial_judge.inference import (
     bias_projection_operator,
-    bias_sensitivity,
     calibration_restriction_test,
     comparison_laplacian,
     human_only_uq,

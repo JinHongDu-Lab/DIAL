@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
-from experiments.simulation.synthetic_plot import normalize_schema
+from experiments.simulation.aggregate import normalize_schema
 from experiments.style import LABEL, PRESENTED_W, STYLE, legend_handles, method_bars, method_lines
 
 
@@ -64,7 +64,7 @@ def test_normalize_schema_maps_pre_rename_names():
 
 
 def test_robustness_load_maps_pre_rename_names(tmp_path):
-    from experiments.real_data.robustness_plot import load
+    from experiments.real_data.aggregate import load
     d = tmp_path / "results" / "real_robustness" / "toy"; d.mkdir(parents=True)
     (d / "rows.jsonl").write_text(json.dumps(dict(sweep="budget", panel="all", kind="none", level=1.0,
                                                   n_0_level=300, n_0=300.0, method="dial_mu", seed=0)) + "\n")

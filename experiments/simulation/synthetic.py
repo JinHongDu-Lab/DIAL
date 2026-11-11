@@ -17,7 +17,7 @@ dial_mle_mu, dial_mle_w (fixed weight n_L/n_H), oracle_mu, oracle_w (population-
 respective GACV paths).
 
 Each (config, row, cell, seed) produces one JSON line per method in results/simulation/<config>/rows.jsonl.
-Existing keys are skipped, so calling again with a new seed range appends. Aggregation lives in synthetic_plot.py.
+Existing keys are skipped, so calling again with a new seed range appends. Aggregation lives in aggregate.py.
 """
 from __future__ import annotations
 
@@ -399,7 +399,7 @@ def existing_keys(path):
     return keys
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="main10", choices=sorted(CONFIGS))
     p.add_argument("--row", default="both", choices=["nH", "nL", "pos", "orth", "record", "both"])
@@ -407,7 +407,7 @@ def main():
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--out", default=None)
     p.add_argument("--addon", action="store_true", help="run only the alternative estimators (ADDON_METHODS) into results/alternatives/simulation/<config>/rows.jsonl")
-    a = p.parse_args()
+    a = p.parse_args(argv)
     s0, s1 = (int(x) for x in a.seeds.split(":"))
     default_out = f"results/alternatives/simulation/{a.config}/rows.jsonl" if a.addon else f"results/simulation/{a.config}/rows.jsonl"
     out = Path(a.out or default_out)

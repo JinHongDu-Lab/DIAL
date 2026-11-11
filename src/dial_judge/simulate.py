@@ -11,7 +11,6 @@ import math
 
 import numpy as np
 
-from .data import comparisons_to_aggregated  # noqa: F401  (re-exported for convenience)
 
 EPS = 1e-12
 

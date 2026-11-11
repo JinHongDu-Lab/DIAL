@@ -1,10 +1,13 @@
-"""Tables and figures of the alternative-estimator runs (results/alternatives/, plus the rows of the
-methods they are compared with). Run from the repository root:
+"""Tables of the comparisons with alternative estimators, the matched and orthogonal-misalignment
+synthetic designs (with their figures), the resampling checks of the intervals, and the rank
+sensitivity. Run from the repository root:
 
-    python -m experiments.alternatives_summary
+    python run_real_data.py summary
 
-Writes results/alternatives/summary/*.csv (per-cell means with Monte Carlo s.e. and fit counts) and
-figures/fig_real_alternatives.pdf, fig_real_matched.pdf, fig_simu_matched.pdf, fig_simu_orth.pdf with the shared method panel of experiments/style.py.
+Writes results/alternatives/summary/*.csv (per-cell means with Monte Carlo s.e. and fit counts),
+results/real_robustness_rank/{summary.csv, bic.json}, and figures/fig_simu_matched.pdf and
+fig_simu_orth.pdf with the shared method panel of experiments/style.py. Each part is skipped when
+its rows are absent.
 """
 from __future__ import annotations
 
@@ -18,11 +21,12 @@ import numpy as np
 import pandas as pd
 
 from experiments import style
-from experiments.style import DATASET_LABEL, LABEL, legend_handles, mark_better, method_lines
+from experiments.style import legend_handles, mark_better, method_lines
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "alternatives" / "summary"
 FIG = ROOT / "figures"
+DATASETS = ["arena_33k", "mt_bench", "pandalm"]
 
 BUDGET_METHODS = ["human_only", "human_box", "human_ridge", "human_firth", "ppi_bt_best", "ppi_bt_panel", "ridge_mu", "atc_btl", "atc_firth", "consensus_cal", "dial_mu"]
 MATCHED_METHODS = ["human_only", "human_firth", "ppi_bt_best", "ppi_bt_panel", "ridge_mu", "atc_btl", "consensus_cal", "dial_mu"]
@@ -107,31 +111,6 @@ def _panel(ax, agg, x, y, methods, log_x=True, ylabel=None, title=None, better=N
         mark_better(ax, better)
 
 
-def fig_budget(agg_by_dataset):
-    fig, axes = plt.subplots(2, 3, figsize=(9.0, 5.0), constrained_layout=True)
-    for c, (ds, agg) in enumerate(agg_by_dataset.items()):
-        a = agg[agg["level"] > 0]
-        _panel(axes[0, c], a, "level", "ref_kendall", BUDGET_METHODS, ylabel=r"Kendall's $\tau$" if c == 0 else "", title=DATASET_LABEL[ds], better="up" if c == 0 else None)
-        _panel(axes[1, c], a, "level", "excess", BUDGET_METHODS, ylabel="excess human log loss" if c == 0 else "", better="down" if c == 0 else None)
-        axes[1, c].set_yscale("log")
-    h, l = legend_handles(BUDGET_METHODS)
-    fig.legend(h, l, loc="lower center", ncol=6, bbox_to_anchor=(0.5, -0.07), frameon=False)
-    fig.savefig(FIG / "fig_real_alternatives.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-
-def fig_matched(agg_by_dataset):
-    fig, axes = plt.subplots(2, 3, figsize=(9.0, 5.0), constrained_layout=True)
-    for c, (ds, agg) in enumerate(agg_by_dataset.items()):
-        _panel(axes[0, c], agg, "level", "ref_kendall", MATCHED_METHODS, ylabel=r"Kendall's $\tau$" if c == 0 else "", title=DATASET_LABEL[ds] + " (matched records)", better="up" if c == 0 else None)
-        _panel(axes[1, c], agg, "level", "excess", MATCHED_METHODS, ylabel="excess human log loss" if c == 0 else "", better="down" if c == 0 else None)
-        axes[1, c].set_yscale("log")
-    h, l = legend_handles(MATCHED_METHODS)
-    fig.legend(h, l, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.07), frameon=False)
-    fig.savefig(FIG / "fig_real_matched.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-
 def fig_synthetic_matched(agg, N=10, d=1):
     fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.7), constrained_layout=True)
     _panel(axes[0], agg, "n_H", "excess", SYN_METHODS, ylabel="excess human risk", title="matched synthetic design", better="down")
@@ -154,7 +133,7 @@ def fig_orth(agg_by_nh):
         a0.set_yscale("log"); a0.set_xlabel(r"orthogonal share $\rho$")
         _panel(a1, agg, "rho_orth", "kendall", ORTH_METHODS, log_x=False, ylabel=r"Kendall's $\tau$" if c == 0 else "", better="up" if c == 0 else None)
         a1.set_xlabel(r"orthogonal share $\rho$")
-        # Theorem 3 crossover: the rho at which n_H Delta_mu reaches (N - 2)/2, by interpolation
+        # risk crossover: the rho at which n_H Delta_mu reaches (N - 2)/2, by interpolation
         t = agg[agg["method"] == "consensus_cal"].sort_values("rho_orth")
         if "nH_delta_mu" in t and t["nH_delta_mu"].notna().any():
             x, y = t["rho_orth"].to_numpy(), t["nH_delta_mu"].to_numpy()
@@ -170,10 +149,11 @@ def fig_orth(agg_by_nh):
 
 
 # --------------------------------------------------------------------------- main
-def main():
+def main(argv=None):
     OUT.mkdir(parents=True, exist_ok=True)
+    FIG.mkdir(exist_ok=True)
     plt.rcParams.update(style.RCPARAMS)
-    datasets = ["arena_33k", "mt_bench", "pandalm"]
+    datasets = DATASETS
 
     budget = {}
     for ds in datasets:
@@ -186,7 +166,6 @@ def main():
         ppi_status(df, "level").assign(dataset=ds).to_csv(OUT / f"budget_ppi_status_{ds}.csv", index=False)
     if budget:
         pd.concat(budget.values()).to_csv(OUT / "budget.csv", index=False)
-        fig_budget(budget)
 
     matched = {}
     for ds in datasets:
@@ -202,7 +181,6 @@ def main():
         ppi_status(sub, "level").assign(dataset=ds).to_csv(OUT / f"matched_ppi_status_{ds}.csv", index=False)
     if matched:
         pd.concat(matched.values()).to_csv(OUT / "matched_all_panel.csv", index=False)
-        fig_matched(matched)
 
     inter = intermediate_rows()
     if not inter.empty:
@@ -227,7 +205,8 @@ def main():
         pd.concat(by.values()).to_csv(OUT / "orth.csv", index=False)
         fig_orth(by)
     bootstrap_tables()
-    print("wrote", sorted(p.name for p in OUT.iterdir()), "and", [f"fig_{n}.pdf" for n in ("real_alternatives","real_matched","simu_matched","simu_orth")])
+    rank_tables()
+    print("wrote", sorted(p.name for p in OUT.iterdir()))
 
 
 # --------------------------------------------------------------------------- record-level bootstrap
@@ -291,6 +270,36 @@ def bootstrap_tables():
                     out[c + "_se"] = g[c].sem()
             out["n_seeds"] = g.size()
             out.reset_index().to_csv(OUT / f"bootstrap_synthetic{tag}.csv", index=False)
+
+
+# --------------------------------------------------------------------------- rank sensitivity
+RANK_METHODS = ("consensus_cal", "dial_mu", "dial_w")
+
+
+def rank_tables():
+    """The `budget` sweep refitted with LLM-side rank 0 and 2 (`--llm-rank`, results/real_robustness_rank/r{0,2})
+    next to the main study's rank 1, for the rank-dependent estimators, and the BIC choice of the rank on the full LLM panels."""
+    from experiments.real_data import robustness as rb
+    dst = ROOT / "results" / "real_robustness_rank"
+    frames = []
+    for r, root in ((0, dst / "r0"), (1, ROOT / "results" / "real_robustness"), (2, dst / "r2")):
+        for d in DATASETS:
+            df = _rows(root / d / "rows.jsonl")
+            if not df.empty:
+                frames.append(df[(df["sweep"] == "budget") & (df["panel"] == "all") & df["method"].isin(RANK_METHODS)].assign(rank=r))
+    if not (dst / "r0").exists() and not (dst / "r2").exists():
+        return
+    out = pd.concat(frames, ignore_index=True).groupby(["dataset", "level", "method", "rank"]).agg(
+        excess=("excess", "mean"), excess_se=("excess", "sem"), kendall=("ref_kendall", "mean"),
+        kendall_se=("ref_kendall", "sem"), n=("excess", "size")).reset_index()
+    out.to_csv(dst / "summary.csv", index=False)
+    cfg, bic = rb.load_config(), {}
+    for d in DATASETS:
+        best, table = rb.select_rank(d, cfg, rank_cap=3)
+        bic[d] = dict(best=int(best), bic={int(k): float(v) for k, v in table.items()})
+    json.dump(bic, open(dst / "bic.json", "w"), indent=1)
+    print("BIC rank:", {d: v["best"] for d, v in bic.items()})
+
 
 if __name__ == "__main__":
     main()

@@ -6,8 +6,8 @@ replicates (labeled and proxy-only records resampled within strata) repeat the w
 including the weight selection. Reported per cell and method:
 
   cov_sand_cell / cov_sand_iid   coverage of the cell-clustered and the independent sandwich
-                                  Wald intervals at the selected weight (Theorem 4, Appendix E)
-  cov_sand_rec                    the same with the record-clustered meat (Prop. record-cluster-inference)
+                                  Wald intervals at the selected weight (fixed-weight asymptotic normality)
+  cov_sand_rec                    the same with the record-clustered meat (cluster-robust inference)
   cov_sand_two                    the same with the two-way meat (records and judge-pair cells)
   cov_*_pre                       cell-, record-, and two-way-sandwich coverage at the prespecified weight
                                   lambda = n_L / n_H (equal per-comparison weight), the setting of the proposition
@@ -19,7 +19,12 @@ including the weight selection. Reported per cell and method:
 
 Human-only rows compare the analytic BTL intervals with the bootstrap of the labeled records.
 
-    python -m experiments.simulation.record_bootstrap --config main10_record --seeds 0:30 --B 100 --workers 6
+`--scale-check` reports only the sandwich coverage of DIAL at larger human and LLM-only budgets
+than the main grid (record-effect s.d. 1), to see whether the finite-sample shortfall of the
+record-clustered sandwich shrinks as the budgets grow.
+
+    python run_simulation.py bootstrap --config main10_record --seeds 0:50 --B 200 --workers 6
+    python run_simulation.py bootstrap --scale-check --workers 16
 """
 from __future__ import annotations
 
@@ -280,18 +285,42 @@ def existing_keys(path):
     return keys
 
 
-def main():
+# --------------------------------------------------------------------------- larger budgets
+SCALE_CELLS = [(2000, 800), (2000, 3200), (20000, 3200)]   # (LLM-only records n_U, human budget n_H)
+SCALE_KEYS = ("cov_sand_cell", "cov_sand_rec", "cov_sand_two", "cov_sand_cell_pre", "cov_sand_rec_pre", "cov_sand_two_pre", "lam", "lam_pre_rel")
+
+
+def scale_job(job):
+    """Sandwich coverage of DIAL in one large-budget cell; the resampling is not needed, so B = 2."""
+    n_U, n_H, sd, seed = job
+    d = [r for r in run_cell(("main10_record", "record", n_U, n_H, sd, seed, 2)) if r["method"] == "dial_mu"][0]
+    return dict(n_U=n_U, n_H=n_H, record_sd=sd, seed=seed, **{k: d.get(k) for k in SCALE_KEYS})
+
+
+def scale_check(seeds, workers, out):
+    jobs = [(nU, nH, 1.0, s) for nU, nH in SCALE_CELLS for s in range(seeds)]
+    with ProcessPoolExecutor(workers) as ex:
+        res = list(ex.map(scale_job, jobs, chunksize=2))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    json.dump(res, open(out, "w"))
+    print(f"{len(res)} cells -> {out}")
+
+
+def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="main10_record")
-    p.add_argument("--seeds", default="0:30")
+    p.add_argument("--seeds", default=None, help="start:stop seed range (default 0:30; 0:100 with --scale-check)")
     p.add_argument("--B", type=int, default=100)
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--out", default=None)
     p.add_argument("--scheme", choices=("boot", "half"), default="boot", help="record bootstrap or half-sampling without replacement")
-    a = p.parse_args()
+    p.add_argument("--scale-check", action="store_true", help="sandwich coverage at larger budgets only")
+    a = p.parse_args(argv)
     from experiments.simulation.synthetic import cells_for
-    s0, s1 = (int(x) for x in a.seeds.split(":"))
-    out = Path(a.out or f"results/alternatives/simulation/{a.config}/bootstrap.jsonl")
+    s0, s1 = (int(x) for x in (a.seeds or ("0:100" if a.scale_check else "0:30")).split(":"))
+    if a.scale_check:
+        return scale_check(s1, a.workers, a.out or f"results/alternatives/simulation/{a.config}/record_scale.json")
+    out = Path(a.out or f"results/alternatives/simulation/{a.config}/bootstrap{'_half' if a.scheme == 'half' else ''}.jsonl")
     out.parent.mkdir(parents=True, exist_ok=True)
     done = existing_keys(out)
     jobs = [(a.config, "record", nL, nH, sd, s, a.B, a.scheme) for (nL, nH, sd) in cells_for(a.config, "record") for s in range(s0, s1) if (nL, nH, sd, s) not in done]
